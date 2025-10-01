@@ -87,26 +87,10 @@ settings = {
 }
 
 
-@cl.set_chat_profiles
-async def chat_profile():
-    profiles = []
-    for model_id in available_models:
-        profiles.append(
-            cl.ChatProfile(
-                name=model_id,
-                markdown_description=f"The underlying LLM model is **{model_id}**.",
-                icon="https://picsum.photos/250",
-            )
-        )
-    return profiles
 
 @cl.on_chat_start
 async def on_chat_start():
-    chat_profile = cl.user_session.get("chat_profile")
-    if isinstance(chat_profile, str):
-        selected_model = chat_profile
-    else:
-        selected_model = chat_profile.name if chat_profile else available_models[0]
+    selected_model = available_models[0]
     cl.user_session.set("selected_model", selected_model)
     
     # Set initial settings in session
@@ -129,6 +113,18 @@ async def on_chat_start():
                 label="TTS Voice",
                 values=available_voices,
                 initial_index=voice_index
+            ),
+            Select(
+                id="model",
+                label="LLM Model",
+                values=available_models,
+                initial_index=0
+            ),
+            Select(
+                id="model_refresh",
+                label="Model Refresh",
+                values=["No Action", "Refresh Now"],
+                initial_index=0
             ),
             Select(
                 id="system_prompt",
@@ -186,18 +182,11 @@ async def on_chat_start():
         content=f"Starting chat using the {selected_model} model and voice: {selected_voice}. Use the settings form above to adjust voice and other options."
     ).send()
 
-    # Add refresh models button
-    refresh_msg = await cl.Message(
-        content="Click to refresh available models from LM Studio server.",
-        actions=[
-            cl.Action(name="refresh_models", payload={}, label="Refresh Models")
-        ]
-    ).send()
-    
     # Settings are now managed via user_session; UI actions removed due to API incompatibility
 
 @cl.on_settings_update
 async def on_settings_update(settings):
+    cl.user_session.set("selected_model", settings["model"])
     cl.user_session.set("selected_voice", settings["voice"])
     cl.user_session.set("system_prompt", prompt_catalog[settings["system_prompt"]])
     cl.user_session.set("character", settings["character"])
@@ -206,6 +195,30 @@ async def on_settings_update(settings):
     cl.user_session.set("tts_speed", settings["tts_speed"])
     cl.user_session.set("tts_exaggeration", settings["tts_exaggeration"])
     cl.user_session.set("reasoning_enabled", settings["reasoning_enabled"])
+
+    if settings["model_refresh"] == "Refresh Now":
+        try:
+            updated_models = fetch_available_models()
+            old_models = cl.user_session.get("available_models", available_models)
+            new_models = [m for m in updated_models if m not in old_models]
+            cl.user_session.set("available_models", updated_models)
+            
+            if new_models:
+                notification = f"Models refreshed! New models added: {', '.join(new_models)}"
+            else:
+                notification = "Models refreshed. No new models detected."
+            
+            # Update selected_model if it was removed
+            selected_model = cl.user_session.get("selected_model")
+            if selected_model not in updated_models:
+                new_selected = updated_models[0] if updated_models else available_models[0]
+                cl.user_session.set("selected_model", new_selected)
+                notification += f" Switched to {new_selected}."
+            
+            await cl.Message(content=notification).send()
+        except Exception as e:
+            await cl.Message(content=f"Failed to refresh models: {str(e)}").send()
+        # Note: User can select "No Action" to stop further refreshes
 
 @cl.on_message
 async def on_message(message: cl.Message):
