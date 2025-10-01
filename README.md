@@ -13,13 +13,50 @@ Goal is to unify and simplify the architecture required to run the Robot
 - [x] Should have widgets to adjust sampler settings for text response on the fly
 - [x] Should have widgets to adjust sampler settings for speech on the fly
 - [x] Should be able to select from available voices via a drop-down selector text-input
-- [ ] Should support a prompt catalog for hot swapping "roles", AI assistant vs. roleplaying character
-- [ ] Should support character profiles, to change the chat participants
+- [x] Should support a prompt catalog for hot swapping "roles", AI assistant vs. roleplaying character
+- [x] Should support character profiles, to change the chat participants
 - [ ] Should Integrate Whisper-like ASR (Automatic Speech Recognition)
 - [ ] Should support multi-modal functionality, for image recognition and tool usage.
 
 ## Status
+Status: Working on STT / ASR. Trying to hook the microphone button to trigger the browser microphone API.
 
+Bug in mirophone detection
+
+```
+16:18:31.313 index.mjs:219 Uncaught (in promise) Error: Session ended: please call .begin() first
+    at CTe.end (index.mjs:219:1775)
+    at Zae.<anonymous> (index.mjs:308:15931)
+    at ca.emit (index.mjs:136:20)
+    at Zae.emitEvent (socket.js:498:20)
+    at Zae.onevent (socket.js:485:18)
+    at Zae.onpacket (socket.js:455:22)
+    at ca.emit (index.mjs:136:20)
+    at manager.js:204:18
+end @ index.mjs:219
+(anonymous) @ index.mjs:308
+ca.emit @ index.mjs:136
+emitEvent @ socket.js:498
+onevent @ socket.js:485
+onpacket @ socket.js:455
+ca.emit @ index.mjs:136
+(anonymous) @ manager.js:204
+Promise.then
+(anonymous) @ websocket-constructor.browser.js:5
+ondecoded @ manager.js:203
+ca.emit @ index.mjs:136
+add @ index.js:146
+ondata @ manager.js:190
+ca.emit @ index.mjs:136
+onPacket @ socket.js:341
+ca.emit @ index.mjs:136
+onPacket @ transport.js:98
+onData @ transport.js:90
+ws.onmessage @ websocket.js:68
+```
+``
+
+--
 - Models can now be dynamically refreshed, selected from the dropdown in the settings menu
 - Voices can now be swapped from the settings menu
 - Prompt catalog is mostly stub functionality. Ideal state would be a text box entry form to manually enter and edit prompts, or delete them.

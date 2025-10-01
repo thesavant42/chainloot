@@ -135,6 +135,7 @@ logo_file_url = "./public/logo_dark.png"
 
 # Load assistant avatar image directly from URL.
 default_avatar_file_url = ""
+custom_js = "/public/stt.js"
 
 # Specify a custom build directory for the frontend.
 # This can be used to customize the frontend code.
