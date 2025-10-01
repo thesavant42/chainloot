@@ -6,16 +6,16 @@ customized chainlit stack for yoda Robot
 ## Goal 
 Goal is to unify and simplify the architecture required to run the Robot
 
--- [x] Should Support hot swapping of different models hosted on LM Studio
--- [] Should support a prompt catalog for hot swapping "roles", ai assistant vs. roleplaying character
--- [] Should support character profiles, to change the chat participants
--- [] should support TTS-WebUI API Integration
--- [] Should support multi-modal functionality, for image recognition and tool usage.
-  -- [] Reasoning should be a checkbox toggle, disabled by default
--- [] Should have widgets to adjust sampler settings for text response on the fly
--- [] Should have widgets to adjust sampler settings for speech on the fly
--- [] Should be able to select from available voices via a drop-down selector text-input
--- [] Should Integrate Whisper-like ASR Automatic Speech Recognition
+- [x] Should support hot swapping of different models hosted on LM Studio
+- [ ] Should support a prompt catalog for hot swapping "roles", AI assistant vs. roleplaying character
+- [ ] Should support character profiles, to change the chat participants
+- [ ] Should support TTS-WebUI API Integration
+- [ ] Should support multi-modal functionality, for image recognition and tool usage.
+    - [ ] Reasoning should be a checkbox toggle, disabled by default
+- [ ] Should have widgets to adjust sampler settings for text response on the fly
+- [ ] Should have widgets to adjust sampler settings for speech on the fly
+- [ ] Should be able to select from available voices via a drop-down selector text-input
+- [ ] Should Integrate Whisper-like ASR (Automatic Speech Recognition)
 
 ## Status
 Currently have a few models hard coded into app.py for some quick testing. The better way to do it would be to query http://192.168.1.98:1234/api/v0/models
@@ -29,6 +29,94 @@ chainlit/ Top Level Directory
 - ./README.md                       # This file
 - ./app.py                          # Man chainlit app code
 - ./.env                            # API keys go here (if needed)
+
+## Open Questions
+
+- Q: How can I populate the dropdown list of models in app.py from http://192.168.1.98:1234/api/v0/models ? The endpoint yields results similar to the following:
+
+```json
+{
+  "data": [
+    {
+      "id": "qwen3-4b-instruct-2507",
+      "object": "model",
+      "type": "llm",
+      "publisher": "unsloth",
+      "arch": "qwen3",
+      "compatibility_type": "gguf",
+      "quantization": "Q4_K_S",
+      "state": "loaded",
+      "max_context_length": 262144,
+      "loaded_context_length": 128000,
+      "capabilities": [
+        "tool_use"
+      ]
+    },
+    {
+      "id": "text-embedding-nomic-embed-text-v1.5",
+      "object": "model",
+      "type": "embeddings",
+      "publisher": "nomic-ai",
+      "arch": "nomic-bert",
+      "compatibility_type": "gguf",
+      "quantization": "Q4_K_M",
+      "state": "not-loaded",
+      "max_context_length": 2048
+    },
+    {
+      "id": "phi-4-mini-instruct",
+      "object": "model",
+      "type": "llm",
+      "publisher": "unsloth",
+      "arch": "phi3",
+      "compatibility_type": "gguf",
+      "quantization": "Q4_K_M",
+      "state": "not-loaded",
+      "max_context_length": 131072
+    },
+    {
+      "id": "qwen/qwen3-14b",
+      "object": "model",
+      "type": "llm",
+      "publisher": "qwen",
+      "arch": "qwen3",
+      "compatibility_type": "gguf",
+      "quantization": "Q4_K_M",
+      "state": "not-loaded",
+      "max_context_length": 32768,
+      "capabilities": [
+        "tool_use"
+      ]
+    },
+    {
+      "id": "text-embedding-mxbai-embed-large-v1",
+      "object": "model",
+      "type": "embeddings",
+      "publisher": "mixedbread-ai",
+      "arch": "bert",
+      "compatibility_type": "gguf",
+      "quantization": "F16",
+      "state": "not-loaded",
+      "max_context_length": 512
+    },
+    {
+      "id": "qwen/qwen3-8b",
+      "object": "model",
+      "type": "llm",
+      "publisher": "qwen",
+      "arch": "qwen3",
+      "compatibility_type": "gguf",
+      "quantization": "Q4_K_M",
+      "state": "not-loaded",
+      "max_context_length": 32768,
+      "capabilities": [
+        "tool_use"
+      ]
+    }
+  ],
+  "object": "list"
+}
+```
 
 ## Components
 
