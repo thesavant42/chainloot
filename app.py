@@ -178,9 +178,7 @@ async def on_chat_start():
         ]
     ).send()
 
-    await cl.Message(
-        content=f"Starting chat using the {selected_model} model and voice: {selected_voice}. Use the settings form above to adjust voice and other options."
-    ).send()
+    await cl.Message(content=f"Model: {selected_model}  Voice: {selected_voice}").send()
 
     # Settings are now managed via user_session; UI actions removed due to API incompatibility
 
