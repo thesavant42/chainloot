@@ -27,6 +27,7 @@ Goal is to unify and simplify the architecture required to run the Robot
 - Whisper ASR integration needs more investigation. TTS-WebUI has whisper integration built in, but it's not clear to me if they support streams in that implementation.
 - Multimodal functionality will require some consideration and careful design, with good test cases.
 
+![model_settings](https://github.com/thesavant42/chainloot/blob/main/docs/model-settings.png?raw=true)
 ## Structure
 
 chainlit/ Top Level Directory
