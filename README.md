@@ -1,7 +1,7 @@
 
 # chainloot
 
-customized chainlit stack for yoda Robot
+Customized cChainlit stack for yoda Robot
 
 ## Goal 
 Goal is to unify and simplify the architecture required to run the Robot
@@ -117,6 +117,16 @@ chainlit/ Top Level Directory
   "object": "list"
 }
 ```
+
+A: <TBD>
+
+Q: Is there an API endpoint from Chatterbox or TTS-WebUI that enumerates the voice list? This can be used to populate a dropdown for rapidly changing voice samples.
+
+A: <TBD>
+
+Q: Is there a way to utilize the Whisper service in TTS-WebUI for Speech to text in Chainlit?
+
+A: <TBD>
 
 ## Components
 
