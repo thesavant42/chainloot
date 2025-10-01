@@ -3,7 +3,9 @@ from dotenv import load_dotenv
 import requests
 import json
 from openai import AsyncOpenAI
+import asyncio
 import chainlit as cl
+from io import BytesIO
 from chainlit.input_widget import Select, Slider, Switch
 import sys
 
@@ -28,7 +30,7 @@ try:
     voices_response = requests.get(f"{CHATTERBOX_URL}/v1/audio/voices/chatterbox")
     voices_response.raise_for_status()
     voices_data = voices_response.json()
-    print(f"Fetched voices data: {voices_data}")  # Debug log
+    #print(f"Fetched voices data: {voices_data}")  # Debug log
     available_voices = [v["value"] for v in voices_data["voices"]]
     if config["tts_voice"] not in available_voices:
         print(f"Warning: Config voice {config['tts_voice']} not in available voices. Using first available.")
@@ -58,6 +60,7 @@ available_models = fetch_available_models()
 
 api_key = os.getenv("LM_API_KEY", config["api_key"])
 client = AsyncOpenAI(base_url=f"{LM_STUDIO_URL}/v1", api_key=api_key)
+tts_client = AsyncOpenAI(base_url=f"{CHATTERBOX_URL}/v1", api_key=api_key)
 # Instrument the OpenAI client
 cl.instrument_openai()
 
@@ -73,9 +76,9 @@ default_tts_stream = config["tts_stream"]
 
 # Prompt catalog
 prompt_catalog = {
-    "default": "You are a helpful AI assistant. Your responses are concise and brief. No more than 2-3 sentences per message.",
-    "Yoda": "You are Yoda, wise Jedi Master. Reply in Yoda-speak. No more than 2-3 sentences per message.",
-    "roleplay": "You are a roleplaying character. No more than 2-3 sentences per message."
+    "AI": "You are a 3-P-O, a helpful AI assistant. Your responses are concise and brief. No more than 2 sentences per message.",
+    "Yoda": "You are Yoda, wise Jedi Master. Reply in Yoda-speak. No more than 2 sentences per message.",
+    "Stark": "You are a helpful but snarky AI assistant. Your name is Tony. No more than 2 sentences per message."
 }
 
 # Character profiles for chat participants
@@ -96,7 +99,7 @@ async def on_chat_start():
     # Set initial settings in session
     selected_voice = default_tts_voice
     cl.user_session.set("selected_voice", selected_voice)
-    cl.user_session.set("system_prompt", prompt_catalog["default"])
+    cl.user_session.set("system_prompt", prompt_catalog["AI"])
     cl.user_session.set("character", character_options[0])
     cl.user_session.set("llm_temp", default_llm_temp)
     cl.user_session.set("max_tokens", default_max_tokens)
@@ -230,7 +233,7 @@ async def on_message(message: cl.Message):
     if not selected_model:
         selected_model = current_models[0]
     
-    system_prompt = cl.user_session.get("system_prompt", prompt_catalog["default"])
+    system_prompt = cl.user_session.get("system_prompt", prompt_catalog["AI"])
     reasoning_enabled = cl.user_session.get("reasoning_enabled", False)
     if reasoning_enabled:
         system_prompt += " Think step by step before responding."
@@ -259,71 +262,63 @@ async def on_message(message: cl.Message):
     # Send text response with character context if needed
     text_msg = await cl.Message(content=f"[{character}]: {text_content}").send()
     
-    # Generate TTS audio
+    # Generate TTS audio streaming
     selected_voice = cl.user_session.get("selected_voice", default_tts_voice)
     tts_speed = cl.user_session.get("tts_speed", default_tts_speed)
     tts_exaggeration = cl.user_session.get("tts_exaggeration", default_tts_exaggeration)
-    try:
-        tts_payload = {
-            "model": default_tts_model,
-            "input": text_content,
-            "voice": selected_voice,
-            "response_format": default_tts_response_format,
-            "speed": tts_speed,
-            "stream": False,
-            "params": {
-                "exaggeration": tts_exaggeration,
-                "cfg_weight": config["tts_cfg_weight"],
-                "temperature": config["tts_temperature"],
-                "device": config["tts_device"],
-                "dtype": config["tts_dtype"],
-                "seed": config["tts_seed"],
-                "chunked": config["tts_chunked"],
-                "use_compilation": config["tts_use_compilation"],
-                "max_new_tokens": config["tts_max_new_tokens"],
-                "max_cache_len": config["tts_max_cache_len"],
-                "desired_length": config["tts_desired_length"],
-                "max_length": config["tts_max_length"],
-                "halve_first_chunk": True,
-                "cpu_offload": False,
-                "cache_voice": False,
-                "tokens_per_slice": None,
-                "remove_milliseconds": None,
-                "remove_milliseconds_start": None,
-                "chunk_overlap_method": "undefined"
-            }
-        }
-        headers = {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
-            "Origin": "https://192.168.1.98:8443",
-            "Accept": "*/*",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Cache-Control": "no-cache",
-            "Pragma": "no-cache"
-        }
-        tts_response = requests.post(
-            f"{CHATTERBOX_URL}/v1/audio/speech",
-            json=tts_payload,
-            headers=headers
-        )
-        print(f"TTS Response status: {tts_response.status_code}")
-        if not tts_response.ok:
-            print(f"TTS Error response: {tts_response.text}")
-        tts_response.raise_for_status()
-        audio_bytes = tts_response.content
-        
-        # Send audio element
-        audio = cl.Audio(
-            name="response_audio.wav",
-            content=audio_bytes,
-            mime="audio/wav",
-            auto_play=True
-        )
-        await audio.send(for_id=text_msg.id)
-    except Exception as e:
-        print(f"TTS Exception: {str(e)}")
-        await cl.Message(content=f"TTS generation failed: {str(e)}").send()
+
+    params_dict = {
+        "exaggeration": tts_exaggeration,
+        "cfg_weight": config["tts_cfg_weight"],
+        "temperature": config["tts_temperature"],
+        "device": config["tts_device"],
+        "dtype": config["tts_dtype"],
+        "seed": config["tts_seed"],
+        "chunked": config["tts_chunked"],
+        "use_compilation": config["tts_use_compilation"],
+        "max_new_tokens": config["tts_max_new_tokens"],
+        "max_cache_len": config["tts_max_cache_len"],
+        "desired_length": config["tts_desired_length"],
+        "max_length": config["tts_max_length"],
+        "halve_first_chunk": True,
+        "cpu_offload": False,
+        "cache_voice": False,
+        "tokens_per_slice": None,
+        "remove_milliseconds": None,
+        "remove_milliseconds_start": None,
+        "chunk_overlap_method": "undefined"
+    }
+
+    track_id = f"{cl.context.session.id}_tts_{hash(text_content) % 10000}"
+
+    buffer = b""
+    async with tts_client.audio.speech.with_streaming_response.create(
+        model=default_tts_model,
+        input=text_content,
+        voice=selected_voice,
+        response_format=default_tts_response_format,
+        speed=tts_speed,
+        extra_body={"params": params_dict}
+    ) as response:
+        async for chunk in response.iter_bytes():
+            buffer += chunk
+
+    audio = cl.Audio(
+        name="response_audio.wav",
+        content=buffer,
+        mime="audio/wav",
+        auto_play=True
+    )
+    await audio.send(for_id=text_msg.id)
+
+@cl.on_audio_start
+async def on_audio_start():
+    pass
+
+@cl.on_audio_chunk
+async def on_audio_chunk(chunk: cl.InputAudioChunk):
+    pass
+
 
 @cl.action_callback("refresh_models")
 async def on_refresh_models(action: cl.Action):
