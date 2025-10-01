@@ -1,7 +1,7 @@
 
 # chainloot
 
-Customized cChainlit stack for yoda Robot
+Customized Chainlit stack for Yoda Robot
 
 ## Goal 
 Goal is to unify and simplify the architecture required to run the Robot
@@ -9,12 +9,12 @@ Goal is to unify and simplify the architecture required to run the Robot
 - [x] Should support hot swapping of different models hosted on LM Studio
 - [ ] Should support a prompt catalog for hot swapping "roles", AI assistant vs. roleplaying character
 - [ ] Should support character profiles, to change the chat participants
-- [ ] Should support TTS-WebUI API Integration
+- [x] Should support TTS-WebUI API Integration
 - [ ] Should support multi-modal functionality, for image recognition and tool usage.
-    - [ ] Reasoning should be a checkbox toggle, disabled by default
-- [ ] Should have widgets to adjust sampler settings for text response on the fly
+    - [x] Reasoning should be a checkbox toggle, disabled by default
+- [x] Should have widgets to adjust sampler settings for text response on the fly
 - [ ] Should have widgets to adjust sampler settings for speech on the fly
-- [ ] Should be able to select from available voices via a drop-down selector text-input
+- [x] Should be able to select from available voices via a drop-down selector text-input
 - [ ] Should Integrate Whisper-like ASR (Automatic Speech Recognition)
 
 ## Status

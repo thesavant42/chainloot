@@ -43,14 +43,17 @@ tts_voice = config["tts_voice"]
 print(f"Using TTS voice: {tts_voice}")
 
 # Fetch available LLM models dynamically
-try:
-    response = requests.get(f"{LM_STUDIO_URL}/api/v0/models")
-    response.raise_for_status()
-    models_data = response.json()["data"]
-    available_models = [m["id"] for m in models_data if m["type"] == "llm"]
-except Exception as e:
-    print(f"Error: Could not fetch models from LM Studio: {e}. Exiting.")
-    sys.exit(1)
+def fetch_available_models():
+    try:
+        response = requests.get(f"{LM_STUDIO_URL}/api/v0/models")
+        response.raise_for_status()
+        models_data = response.json()["data"]
+        return [m["id"] for m in models_data if m["type"] == "llm"]
+    except Exception as e:
+        raise Exception(f"Could not fetch models from LM Studio: {e}")
+
+
+available_models = fetch_available_models()
 
 
 api_key = os.getenv("LM_API_KEY", config["api_key"])
@@ -71,12 +74,12 @@ default_tts_stream = config["tts_stream"]
 # Prompt catalog
 prompt_catalog = {
     "default": "You are a helpful AI assistant. Your responses are concise and brief. No more than 2-3 sentences per message.",
-    "yoda": "You are Yoda, wise Jedi Master. Reply in Yoda-speak",
+    "yoda": "You are Yoda, wise Jedi Master. Reply in Yoda-speak.",
     "roleplay": "You are a roleplaying character. Engage in immersive dialogue."
 }
 
 # Character profiles for chat participants
-character_options = ["User", "Yoda", "Jedi Apprentice"]
+character_options = ["AI", "Yoda", "Stark"]
 
 settings = {
     "temperature": default_llm_temp,
@@ -182,6 +185,14 @@ async def on_chat_start():
     await cl.Message(
         content=f"Starting chat using the {selected_model} model and voice: {selected_voice}. Use the settings form above to adjust voice and other options."
     ).send()
+
+    # Add refresh models button
+    refresh_msg = await cl.Message(
+        content="Click to refresh available models from LM Studio server.",
+        actions=[
+            cl.Action(name="refresh_models", payload={}, label="Refresh Models")
+        ]
+    ).send()
     
     # Settings are now managed via user_session; UI actions removed due to API incompatibility
 
@@ -201,9 +212,12 @@ async def on_message(message: cl.Message):
     if not message.content:
         return
     
+    # Use latest models from session if available, else global
+    session_models = cl.user_session.get("available_models")
+    current_models = session_models if session_models else available_models
     selected_model = cl.user_session.get("selected_model")
     if not selected_model:
-        selected_model = available_models[0]
+        selected_model = current_models[0]
     
     system_prompt = cl.user_session.get("system_prompt", prompt_catalog["default"])
     reasoning_enabled = cl.user_session.get("reasoning_enabled", False)
@@ -299,4 +313,28 @@ async def on_message(message: cl.Message):
     except Exception as e:
         print(f"TTS Exception: {str(e)}")
         await cl.Message(content=f"TTS generation failed: {str(e)}").send()
+
+@cl.action_callback("refresh_models")
+async def on_refresh_models(action: cl.Action):
+    try:
+        updated_models = fetch_available_models()
+        old_models = cl.user_session.get("available_models", available_models)
+        new_models = [m for m in updated_models if m not in old_models]
+        cl.user_session.set("available_models", updated_models)
+        
+        if new_models:
+            notification = f"Models refreshed! New models added: {', '.join(new_models)}"
+        else:
+            notification = "Models refreshed. No new models detected."
+        
+        # Update selected_model if it was removed
+        selected_model = cl.user_session.get("selected_model")
+        if selected_model not in updated_models:
+            new_selected = updated_models[0] if updated_models else available_models[0]
+            cl.user_session.set("selected_model", new_selected)
+            notification += f" Switched to {new_selected}."
+        
+        await cl.Message(content=notification).send()
+    except Exception as e:
+        await cl.Message(content=f"Failed to refresh models: {str(e)}").send()
 
