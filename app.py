@@ -74,8 +74,8 @@ default_tts_stream = config["tts_stream"]
 # Prompt catalog
 prompt_catalog = {
     "default": "You are a helpful AI assistant. Your responses are concise and brief. No more than 2-3 sentences per message.",
-    "yoda": "You are Yoda, wise Jedi Master. Reply in Yoda-speak.",
-    "roleplay": "You are a roleplaying character. Engage in immersive dialogue."
+    "Yoda": "You are Yoda, wise Jedi Master. Reply in Yoda-speak. No more than 2-3 sentences per message.",
+    "roleplay": "You are a roleplaying character. No more than 2-3 sentences per message."
 }
 
 # Character profiles for chat participants
