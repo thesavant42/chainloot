@@ -4,6 +4,7 @@ import requests
 import json
 from openai import AsyncOpenAI
 import chainlit as cl
+from chainlit.input_widget import Select, Slider, Switch
 import sys
 
 load_dotenv()
@@ -105,28 +106,95 @@ async def on_chat_start():
         selected_model = chat_profile.name if chat_profile else available_models[0]
     cl.user_session.set("selected_model", selected_model)
     
-    # Prompt for voice selection before starting
-    actions = [cl.Action(name=f"voice_select", label=v["label"], payload={"voice": v["value"]}) for v in voices_data["voices"]]
-    res = await cl.AskActionMessage(
-        content="Select a TTS voice to start the chat:",
-        actions=actions
-    ).send()
-    selected_voice = res.get("payload", {}).get("voice") if res else config["tts_voice"]
+    # Set initial settings in session
+    selected_voice = default_tts_voice
     cl.user_session.set("selected_voice", selected_voice)
-    
-    # Set defaults for new session
     cl.user_session.set("system_prompt", prompt_catalog["default"])
     cl.user_session.set("character", character_options[0])
     cl.user_session.set("llm_temp", default_llm_temp)
     cl.user_session.set("max_tokens", default_max_tokens)
     cl.user_session.set("tts_speed", default_tts_speed)
     cl.user_session.set("tts_exaggeration", default_tts_exaggeration)
+    cl.user_session.set("reasoning_enabled", False)
     
+    # Send dynamic chat settings form for voice and other options
+    voice_index = available_voices.index(selected_voice) if selected_voice in available_voices else 0
+    settings_form = await cl.ChatSettings(
+        [
+            Select(
+                id="voice",
+                label="TTS Voice",
+                values=available_voices,
+                initial_index=voice_index
+            ),
+            Select(
+                id="system_prompt",
+                label="System Prompt",
+                values=list(prompt_catalog.keys()),
+                initial_index=0
+            ),
+            Select(
+                id="character",
+                label="Character",
+                values=character_options,
+                initial_index=0
+            ),
+            Slider(
+                id="llm_temp",
+                label="LLM Temperature",
+                initial=default_llm_temp,
+                min=0.0,
+                max=2.0,
+                step=0.1
+            ),
+            Slider(
+                id="max_tokens",
+                label="Max Tokens",
+                initial=default_max_tokens,
+                min=100,
+                max=2000,
+                step=50
+            ),
+            Slider(
+                id="tts_speed",
+                label="TTS Speed",
+                initial=default_tts_speed,
+                min=0.25,
+                max=4.0,
+                step=0.05
+            ),
+            Slider(
+                id="tts_exaggeration",
+                label="TTS Exaggeration",
+                initial=default_tts_exaggeration,
+                min=0.0,
+                max=1.0,
+                step=0.1
+            ),
+            Switch(
+                id="reasoning_enabled",
+                label="Enable Reasoning",
+                initial=False
+            )
+        ]
+    ).send()
+
     await cl.Message(
-        content=f"Starting chat using the {selected_model} model and voice: {selected_voice}."
+        content=f"Starting chat using the {selected_model} model and voice: {selected_voice}. Use the settings form above to adjust voice and other options."
     ).send()
     
     # Settings are now managed via user_session; UI actions removed due to API incompatibility
+
+@cl.on_settings_update
+async def on_settings_update(settings):
+    cl.user_session.set("selected_voice", settings["voice"])
+    cl.user_session.set("system_prompt", prompt_catalog[settings["system_prompt"]])
+    cl.user_session.set("character", settings["character"])
+    cl.user_session.set("llm_temp", settings["llm_temp"])
+    cl.user_session.set("max_tokens", int(settings["max_tokens"]))
+    cl.user_session.set("tts_speed", settings["tts_speed"])
+    cl.user_session.set("tts_exaggeration", settings["tts_exaggeration"])
+    cl.user_session.set("reasoning_enabled", settings["reasoning_enabled"])
 
 @cl.on_message
 async def on_message(message: cl.Message):
@@ -225,78 +293,10 @@ async def on_message(message: cl.Message):
             name="response_audio.wav",
             content=audio_bytes,
             mime="audio/wav",
-            autoplay=True
+            auto_play=True
         )
         await audio.send(for_id=text_msg.id)
     except Exception as e:
         print(f"TTS Exception: {str(e)}")
         await cl.Message(content=f"TTS generation failed: {str(e)}").send()
 
-async def chat_settings():
-    return {
-        "model": available_models[0],
-        "voice": default_tts_voice,
-        "system_prompt": "default",
-        "character": character_options[0],
-        "llm_temp": default_llm_temp,
-        "max_tokens": default_max_tokens,
-        "tts_speed": default_tts_speed,
-        "tts_exaggeration": default_tts_exaggeration,
-        "reasoning_enabled": False,
-        "schema": {
-            "type": "object",
-            "properties": {
-                "voice": {
-                    "type": "string",
-                    "title": "Voice",
-                    "enum": available_voices,
-                    "description": "Select voice for TTS"
-                },
-                "system_prompt": {
-                    "type": "string",
-                    "title": "Prompt Role",
-                    "enum": list(prompt_catalog.keys()),
-                    "description": "Select system prompt"
-                },
-                "character": {
-                    "type": "string",
-                    "title": "Character",
-                    "enum": character_options,
-                    "description": "Select character"
-                },
-                "llm_temp": {
-                    "type": "number",
-                    "title": "LLM Temperature",
-                    "minimum": 0.0,
-                    "maximum": 2.0,
-                    "description": "Adjust creativity"
-                },
-                "max_tokens": {
-                    "type": "integer",
-                    "title": "Max Tokens",
-                    "minimum": 100,
-                    "maximum": 2000,
-                    "description": "Max response length"
-                },
-                "tts_speed": {
-                    "type": "number",
-                    "title": "TTS Speed",
-                    "minimum": 0.25,
-                    "maximum": 4.0,
-                    "description": "Speech speed"
-                },
-                "tts_exaggeration": {
-                    "type": "number",
-                    "title": "TTS Exaggeration",
-                    "minimum": 0.0,
-                    "maximum": 1.0,
-                    "description": "Voice expressiveness"
-                },
-                "reasoning_enabled": {
-                    "type": "boolean",
-                    "title": "Enable Reasoning",
-                    "description": "Toggle step-by-step reasoning"
-                }
-            }
-        }
-    }
