@@ -231,6 +231,7 @@ async def handle_voice_input(request: Request):
     This endpoint receives the transcribed text and sessionId from the frontend,
     finds the correct user session, and processes the message.
     """
+    print("✅ /voice-input endpoint was hit!")
     data = await request.json()
     transcript = data.get("transcript")
     session_id = data.get("sessionId")
