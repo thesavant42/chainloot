@@ -15,9 +15,10 @@ document.addEventListener("DOMContentLoaded", function() {
     let finalTranscript = ''; // <-- CHANGE 1: Variable to hold the full transcript
 
     // Create and style the microphone button
+    // why are we creating a mic button? The Chainlit UI has a microphone icon
     const micButton = document.createElement("button");
     micButton.id = "mic-button";
-    micButton.innerHTML = "🎤";
+    micButton.innerHTML = "🎤"; // emojis are stupid.
     micButton.style.position = "fixed";
     micButton.style.bottom = "15px";
     micButton.style.right = "15px";
@@ -42,7 +43,7 @@ document.addEventListener("DOMContentLoaded", function() {
     recognition.onstart = () => {
         isRecording = true;
         finalTranscript = ''; // Clear transcript on new recording
-        micButton.innerHTML = "🛑";
+        micButton.innerHTML = "🛑"; // Emojis are stupid.
         micButton.style.backgroundColor = "#ffdddd";
         console.log("Speech recognition started.");
     };
@@ -50,15 +51,41 @@ document.addEventListener("DOMContentLoaded", function() {
     // When recognition ends
     recognition.onend = () => {
         isRecording = false;
-        micButton.innerHTML = "🎤";
+        micButton.innerHTML = "🎤"; // Emojis are stupid.
         micButton.style.backgroundColor = "#f0f0f0";
         console.log("Speech recognition ended.");
 
-        // <-- CHANGE 2: This is the new, reliable logic
-        // Only send to backend if we have a final transcript
         if (finalTranscript) {
-            console.log("Sending final transcript to backend:", finalTranscript);
-            sendTranscriptToBackend(finalTranscript);
+            console.log("Setting final transcript to input and submitting via API:", finalTranscript);
+            const input = document.querySelector('textarea[placeholder*="message"], input[type="text"][placeholder*="message"], .cl-input');
+            if (input) {
+                input.value = finalTranscript.trim();
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                console.log("Final transcript set in input for visibility.");
+            }
+            // Send via Chainlit API endpoint
+            fetch('/api/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    content: finalTranscript.trim()
+                })
+            }).then(response => {
+                if (response.ok) {
+                    console.log("Message sent successfully via API.");
+                    // Clear input after successful send
+                    if (input) {
+                        input.value = '';
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                } else {
+                    console.error("Failed to send message via API:", response.status);
+                }
+            }).catch(error => {
+                console.error("Error sending message via API:", error);
+            });
         } else {
             console.log("No final transcript to send.");
         }
@@ -74,8 +101,15 @@ document.addEventListener("DOMContentLoaded", function() {
                 interimTranscript += event.results[i][0].transcript;
             }
         }
+        // Update input with current transcript (final + interim)
+        const currentTranscript = finalTranscript + interimTranscript;
+        const input = document.querySelector('textarea[placeholder*="message"], input[type="text"][placeholder*="message"]');
+        if (input && currentTranscript) {
+            input.value = currentTranscript.trim();
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
         console.log("Interim: ", interimTranscript);
-        console.log("Final: ", finalTranscript);
+        console.log("Final so far: ", finalTranscript);
     };
 
     // Handle any errors
@@ -84,28 +118,15 @@ document.addEventListener("DOMContentLoaded", function() {
     };
 
     async function sendTranscriptToBackend(transcript) {
-        const sessionId = window.chainlit.sessionId;
-        if (!sessionId) {
-            console.error("Chainlit session ID not found!");
-            return;
-        }
-
-        try {
-            const response = await fetch("/voice-input", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    transcript: transcript.trim(), // Trim whitespace
-                    sessionId: sessionId
-                }),
+        if (window.io && window.io.socket) {
+            console.log("Sending transcript via socket.io emit:", transcript);
+            window.io.socket.emit('message', {
+                type: 'user_message',
+                content: transcript.trim()
             });
-            if (!response.ok) {
-                console.error("Backend request failed:", response.statusText);
-            } else {
-                console.log("Transcript sent successfully.");
-            }
-        } catch (error) {
-            console.error("Error sending transcript:", error);
+            console.log("Transcript sent via socket.io.");
+        } else {
+            console.error("Socket.io not available. Ensure in active chat.");
         }
     }
 });

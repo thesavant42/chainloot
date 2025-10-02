@@ -1,3 +1,4 @@
+
 import os
 from dotenv import load_dotenv
 import requests
@@ -5,13 +6,11 @@ import json
 from openai import AsyncOpenAI
 import asyncio
 import chainlit as cl
-from fastapi import Request
-from fastapi.responses import JSONResponse
-from chainlit.server import app
-from chainlit.user_session import user_sessions
+from chainlit.logger import logger
 from io import BytesIO
 from chainlit.input_widget import Select, Slider, Switch
 import sys
+import wave
 
 load_dotenv()
 
@@ -34,7 +33,6 @@ try:
     voices_response = requests.get(f"{CHATTERBOX_URL}/v1/audio/voices/chatterbox")
     voices_response.raise_for_status()
     voices_data = voices_response.json()
-    #print(f"Fetched voices data: {voices_data}")  # Debug log
     available_voices = [v["value"] for v in voices_data["voices"]]
     if config["tts_voice"] not in available_voices:
         print(f"Warning: Config voice {config['tts_voice']} not in available voices. Using first available.")
@@ -58,9 +56,7 @@ def fetch_available_models():
     except Exception as e:
         raise Exception(f"Could not fetch models from LM Studio: {e}")
 
-
 available_models = fetch_available_models()
-
 
 api_key = os.getenv("LM_API_KEY", config["api_key"])
 client = AsyncOpenAI(base_url=f"{LM_STUDIO_URL}/v1", api_key=api_key)
@@ -92,8 +88,6 @@ settings = {
     "temperature": default_llm_temp,
     "max_tokens": default_max_tokens,
 }
-
-
 
 @cl.on_chat_start
 async def on_chat_start():
@@ -186,6 +180,7 @@ async def on_chat_start():
     ).send()
 
     await cl.Message(content=f"Model: {selected_model}  Voice: {selected_voice}").send()
+    await cl.Message(content="Voice mode ready! Use the mic button in the chat input for speech-to-text (server-side Whisper STT).").send()
 
     # Settings are now managed via user_session; UI actions removed due to API incompatibility
 
@@ -225,44 +220,12 @@ async def on_settings_update(settings):
             await cl.Message(content=f"Failed to refresh models: {str(e)}").send()
         # Note: User can select "No Action" to stop further refreshes
 
-@app.post("/voice-input")
-async def handle_voice_input(request: Request):
-    """
-    This endpoint receives the transcribed text and sessionId from the frontend,
-    finds the correct user session, and processes the message.
-    """
-    print("✅ /voice-input endpoint was hit!")
-    data = await request.json()
-    transcript = data.get("transcript")
-    session_id = data.get("sessionId")
-
-    if not transcript or not session_id:
-        return JSONResponse(content={"status": "error", "message": "Missing transcript or sessionId"}, status_code=400)
-
-    # Check if the session ID is valid
-    if session_id in user_sessions:
-        # Get the user's message processing function (the one decorated with @cl.on_message)
-        on_message_coro = on_message
-
-        # Create the message object
-        msg = cl.Message(author="User", content=transcript)
-
-        # Run the message processing function within the correct user session context
-        await cl.run_sync(
-            cl.context.with_session(
-                user_sessions[session_id].id,
-                lambda: on_message_coro(msg),
-            )
-        )
-        return JSONResponse(content={"status": "ok"}, status_code=200)
-
-    return JSONResponse(content={"status": "error", "message": "Session not found"}, status_code=404)
-
-
 @cl.on_message
 async def on_message(message: cl.Message):
     if not message.content:
         return
+
+    logger.info(f"Processing message: {message.content[:100]}...")
     
     # Use latest models from session if available, else global
     session_models = cl.user_session.get("available_models")
@@ -354,43 +317,9 @@ async def on_message(message: cl.Message):
 # Set to "return True" in the Github example
 @cl.on_audio_start
 async def on_audio_start():
+    cl.user_session.set("audio_buffer", BytesIO())
+    logger.info("Audio start event triggered - buffering for STT")
     return True
 
 # This is required as of Chainlit >=2.0
-# https://github.com/Chainlit/chainlit/releases/tag/2.0rc0
-# Set to "pass" in the GitHub example
-@cl.on_audio_chunk
-async def on_audio_chunk(chunk: cl.InputAudioChunk):
-    pass
-
-# This is required as of Chainlit >=2.0
-# https://github.com/Chainlit/chainlit/releases/tag/2.0rc0
-# set to "pass" in the github example
-@cl.on_audio_end
-async def on_audio_end():
-    pass
-
-@cl.action_callback("refresh_models")
-async def on_refresh_models(action: cl.Action):
-    try:
-        updated_models = fetch_available_models()
-        old_models = cl.user_session.get("available_models", available_models)
-        new_models = [m for m in updated_models if m not in old_models]
-        cl.user_session.set("available_models", updated_models)
-        
-        if new_models:
-            notification = f"Models refreshed! New models added: {', '.join(new_models)}"
-        else:
-            notification = "Models refreshed. No new models detected."
-        
-        # Update selected_model if it was removed
-        selected_model = cl.user_session.get("selected_model")
-        if selected_model not in updated_models:
-            new_selected = updated_models[0] if updated_models else available_models[0]
-            cl.user_session.set("selected_model", new_selected)
-            notification += f" Switched to {new_selected}."
-        
-        await cl.Message(content=notification).send()
-    except Exception as e:
-        await cl.Message(content=f"Failed to refresh models: {str(e)}").send()
-
+# https://github.com/Chainlit/chainlit/releases/tag/2.0rc
