@@ -311,14 +311,26 @@ async def on_message(message: cl.Message):
     )
     await audio.send(for_id=text_msg.id)
 
+# This is required as of Chainlit >=2.0
+# https://github.com/Chainlit/chainlit/releases/tag/2.0rc0
+# Set to "return True" in the Github example
 @cl.on_audio_start
 async def on_audio_start():
-    pass
+    return True
 
+# This is required as of Chainlit >=2.0
+# https://github.com/Chainlit/chainlit/releases/tag/2.0rc0
+# Set to "pass" in the GitHub example
 @cl.on_audio_chunk
 async def on_audio_chunk(chunk: cl.InputAudioChunk):
     pass
 
+# This is required as of Chainlit >=2.0
+# https://github.com/Chainlit/chainlit/releases/tag/2.0rc0
+# set to "pass" in the github example
+@cl.on_audio_end
+async def on_audio_end():
+    pass
 
 @cl.action_callback("refresh_models")
 async def on_refresh_models(action: cl.Action):

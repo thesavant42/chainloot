@@ -19,7 +19,8 @@ Goal is to unify and simplify the architecture required to run the Robot
 - [ ] Should support multi-modal functionality, for image recognition and tool usage.
 
 ## Status
-Status: Working on STT / ASR. Trying to hook the microphone button to trigger the browser microphone API.
+
+- Status: Working on STT / ASR. Trying to hook the microphone button to trigger the browser microphone API.
 
 Bug in mirophone detection
 
@@ -54,7 +55,7 @@ onPacket @ transport.js:98
 onData @ transport.js:90
 ws.onmessage @ websocket.js:68
 ```
-``
+
 
 --
 - Models can now be dynamically refreshed, selected from the dropdown in the settings menu
@@ -65,6 +66,7 @@ ws.onmessage @ websocket.js:68
 - Multimodal functionality will require some consideration and careful design, with good test cases.
 
 ![model_settings](https://github.com/thesavant42/chainloot/blob/main/docs/model-settings.png?raw=true)
+
 ## Structure
 
 chainlit/ Top Level Directory
@@ -79,7 +81,7 @@ chainlit/ Top Level Directory
 
 Q: Is there a way to utilize the Whisper service in TTS-WebUI for Speech to text in Chainlit?
 
-A: <TBD>
+A: ** IN PROGRESS**
 
 ## Components
 
