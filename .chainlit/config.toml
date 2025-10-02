@@ -42,7 +42,7 @@ edit_message = true
 allow_thread_sharing = false
 
 # Custom begin header
-speech_to_text.enabled = true
+# speech_to_text.enabled = true
 
 [features.slack]
 # Add emoji reaction when message is received (requires reactions:write OAuth scope)
@@ -91,14 +91,14 @@ reaction_on_message_received = false
 # Name of the assistant.
 name = "AI"
 
-# default_theme = "dark"
+default_theme = "dark"
 
-# layout = "wide"
+layout = "wide"
 
 # default_sidebar_state = "open"
 
 # Description of the assistant. This is used for HTML tags.
-# description = ""
+# description = "yoda robot"
 
 # Chain of Thought (CoT) display mode. Can be "hidden", "tool_call" or "full".
 cot = "full"

@@ -180,7 +180,7 @@ async def on_chat_start():
     ).send()
 
     await cl.Message(content=f"Model: {selected_model}  Voice: {selected_voice}").send()
-    await cl.Message(content="Voice mode ready! Use the mic button in the chat input for speech-to-text (server-side Whisper STT).").send()
+    await cl.Message(content="Voice mode ready!").send()
 
     # Settings are now managed via user_session; UI actions removed due to API incompatibility
 
