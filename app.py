@@ -315,11 +315,105 @@ async def on_message(message: cl.Message):
 # This is required as of Chainlit >=2.0
 # https://github.com/Chainlit/chainlit/releases/tag/2.0rc0
 # Set to "return True" in the Github example
+# This is required as of Chainlit >=2.0 for audio features
+# https://github.com/Chainlit/chainlit/releases/tag/2.0rc
 @cl.on_audio_start
 async def on_audio_start():
-    cl.user_session.set("audio_buffer", BytesIO())
-    logger.info("Audio start event triggered - buffering for STT")
+    # Client-side STT, no server buffering needed
+    logger.info("Audio start event - client-side STT active")
     return True
 
-# This is required as of Chainlit >=2.0
-# https://github.com/Chainlit/chainlit/releases/tag/2.0rc
+@cl.on_audio_end
+async def on_audio_end():
+    # Client-side STT, no server processing needed
+    logger.info("Audio end event - client-side STT active")
+    return True
+
+# Action handler for client-side STT transcript submission
+@cl.action_callback("stt_submit")
+async def on_stt_submit(action: cl.Action):
+    transcript = action.payload.get("transcript", "").strip()
+    if not transcript:
+        await cl.Message(content="No transcript received from STT.").send()
+        return
+
+    logger.info(f"Received STT transcript: {transcript[:100]}...")
+
+    # Send as user message
+    user_msg = await cl.Message(content=transcript).send()
+
+    # Mirror on_message logic for response
+    session_models = cl.user_session.get("available_models")
+    current_models = session_models if session_models else available_models
+    selected_model = cl.user_session.get("selected_model") or current_models[0]
+    system_prompt = cl.user_session.get("system_prompt", prompt_catalog["AI"])
+    reasoning_enabled = cl.user_session.get("reasoning_enabled", False)
+    if reasoning_enabled:
+        system_prompt += " Think step by step before responding."
+    llm_temp = cl.user_session.get("llm_temp", default_llm_temp)
+    max_tokens = cl.user_session.get("max_tokens", default_max_tokens)
+
+    try:
+        response = await client.chat.completions.create(
+            model=selected_model,
+            messages=[
+                {"content": system_prompt, "role": "system"},
+                {"content": transcript, "role": "user"}
+            ],
+            temperature=llm_temp,
+            max_tokens=max_tokens,
+        )
+        text_content = response.choices[0].message.content
+
+        character = cl.user_session.get("character", character_options[0])
+        text_msg = await cl.Message(content=f"[{character}]: {text_content}").send()
+
+        # Generate TTS audio
+        selected_voice = cl.user_session.get("selected_voice", default_tts_voice)
+        tts_speed = cl.user_session.get("tts_speed", default_tts_speed)
+        tts_exaggeration = cl.user_session.get("tts_exaggeration", default_tts_exaggeration)
+
+        params_dict = {
+            "exaggeration": tts_exaggeration,
+            "cfg_weight": config["tts_cfg_weight"],
+            "temperature": config["tts_temperature"],
+            "device": config["tts_device"],
+            "dtype": config["tts_dtype"],
+            "seed": config["tts_seed"],
+            "chunked": config["tts_chunked"],
+            "use_compilation": config["tts_use_compilation"],
+            "max_new_tokens": config["tts_max_new_tokens"],
+            "max_cache_len": config["tts_max_cache_len"],
+            "desired_length": config["tts_desired_length"],
+            "max_length": config["tts_max_length"],
+            "halve_first_chunk": True,
+            "cpu_offload": False,
+            "cache_voice": False,
+            "tokens_per_slice": None,
+            "remove_milliseconds": None,
+            "remove_milliseconds_start": None,
+            "chunk_overlap_method": "undefined"
+        }
+
+        buffer = b""
+        async with tts_client.audio.speech.with_streaming_response.create(
+            model=default_tts_model,
+            input=text_content,
+            voice=selected_voice,
+            response_format=default_tts_response_format,
+            speed=tts_speed,
+            extra_body={"params": params_dict}
+        ) as response:
+            async for chunk in response.iter_bytes():
+                buffer += chunk
+
+        audio = cl.Audio(
+            name="response_audio.wav",
+            content=buffer,
+            mime="audio/wav",
+            auto_play=True
+        )
+        await audio.send()
+    except Exception as e:
+        logger.error(f"Error processing STT submission: {str(e)}")
+        await cl.Message(content=f"Error processing voice input: {str(e)}").send()

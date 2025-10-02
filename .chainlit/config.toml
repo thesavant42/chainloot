@@ -42,7 +42,7 @@ edit_message = true
 allow_thread_sharing = false
 
 # Custom begin header
-# speech_to_text.enabled = true
+speech_to_text.enabled = true
 
 [features.slack]
 # Add emoji reaction when message is received (requires reactions:write OAuth scope)
@@ -98,7 +98,7 @@ layout = "wide"
 # default_sidebar_state = "open"
 
 # Description of the assistant. This is used for HTML tags.
-# description = "yoda robot"
+description = "yoda robot"
 
 # Chain of Thought (CoT) display mode. Can be "hidden", "tool_call" or "full".
 cot = "full"
@@ -138,7 +138,7 @@ logo_file_url = "./public/logo_dark.png"
 
 # Load assistant avatar image directly from URL.
 default_avatar_file_url = ""
-custom_js = "/public/stt.js"
+custom_js = "/public/react-stt.js"
 
 # Specify a custom build directory for the frontend.
 # This can be used to customize the frontend code.

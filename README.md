@@ -24,12 +24,8 @@ Goal is to unify and simplify the architecture required to run the Robot
 
 Microphone is accessible via browser API, but no STT yet.
 
-```
+STRATEGY: Use react-speech-recognition with a custom webhook to transcribe, then send via chainlit api
 
-```
-
-
---
 - Models can now be dynamically refreshed, selected from the dropdown in the settings menu
 - Voices can now be swapped from the settings menu
 - Prompt catalog is mostly stub functionality. Ideal state would be a text box entry form to manually enter and edit prompts, or delete them.
@@ -43,10 +39,6 @@ Microphone is accessible via browser API, but no STT yet.
 
 chainlit/ Top Level Directory
 - docs/                             # Folder for documentation and support files, API schema docs
-- docs/docs/                        # Chainlit 2.8.2 Docs
-- docs/cookbook/                    # Chainlit examples REFRENCE ONLY DO NOT EDIT
-- docs/chatterbox-openapi.json      # Minimal OpenAI-compatible TTS API docs
-- docs/gradioopenapi.json           # Detailed Gradio TTS API docs
 - ./README.md                       # This file
 - ./app.py                          # Man chainlit app code
 - ./.env                            # API keys go here (if needed)
