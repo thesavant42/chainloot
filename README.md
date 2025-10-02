@@ -20,18 +20,34 @@ Goal is to unify and simplify the architecture required to run the Robot
 
 ## Status
 
-- Status: Working on STT / ASR. Trying to hook the microphone button to trigger the browser microphone API.
+ALERT: NO MORE BROWSER-BASED STT! MOVING TO INTERNALLY-HOSTED WHISPER
+Pivot on STT: The tts endpoint server now supports openai-compatible speech to text.
 
-Microphone is accessible via browser API, but no STT yet.
+Implement Speech to text using Chainlit's integrated microphone widget, send request to http://192.168.1.98:7778/v1/audio/transcriptions and then return the transcription to the Chainlit API.
+No new bugs! If fixing a bug means introducing a different bug, the bug is not fixed, and the task has not succeeded.
 
-STRATEGY: Use react-speech-recognition with a custom webhook to transcribe, then send via chainlit api
+### Endpoints
+OpenAI-Compatible Text to Speech  (TTS) API: 	http://192.168.1.98:7778/v1/audio/speech
+OpenAI-Compatible Whisper (STT) API: 			http://192.168.1.98:7778/v1/audio/transcriptions
+TTS-WebUI Audio Models List (chatterbox)		http://192.168.1.98:7778/v1/audio/models
+List Voices API (chatterbox-tts):				http://192.168.1.98:7778/v1/audio/voices
+LM Studio - List Models (LM Studio api):        http://192.168.1.98:1234/api/v0/models
+LM Studio - (OpenAPI) Chat Completion API:      http://192.168.1.98:1234/v1
 
-- Models can now be dynamically refreshed, selected from the dropdown in the settings menu
-- Voices can now be swapped from the settings menu
-- Prompt catalog is mostly stub functionality. Ideal state would be a text box entry form to manually enter and edit prompts, or delete them.
-- Current character profile changing is mostly a stub. Same as above, would prefer a text edit form to update and delete profiles.
-- Whisper ASR integration needs more investigation. TTS-WebUI has whisper integration built in, but it's not clear to me if they support streams in that implementation.
-- Multimodal functionality will require some consideration and careful design, with good test cases.
+### Docs
+SwaggerDoc:								        http://192.168.1.98:7778/docs#/
+OpenAPI JSON:							        http://192.168.1.98:7778/openapi.json
+Gradio UI for TTS-WebUI:				        http://192.168.1.98:7770/
+Gradio UI API Doc:						        http://192.168.1.98:7770/openapi.json
+React UI for TTS-WebUI:					        http://192.168.1.98:3000/
+
+### Windows-curl friendly TTS Test string
+
+```
+ curl -X POST http://192.168.1.98:7778/v1/audio/speech -H "Content-Type: application/json" -d '{"model":"chatterbox","input":"Hello world! This is a streaming test.","voice":"random","stream":true}' --proxy http://127.0.0.1:8080
+ ```
+
+
 
 ![model_settings](https://github.com/thesavant42/chainloot/blob/main/docs/model-settings.png?raw=true)
 
@@ -39,41 +55,16 @@ STRATEGY: Use react-speech-recognition with a custom webhook to transcribe, then
 
 chainlit/ Top Level Directory
 - docs/                             # Folder for documentation and support files, API schema docs
+- docs/chainlit-docs/
+- docs/tts-webui-apis/              # OpenAPI docs for Chatterbox, TTS-WebUI
 - ./README.md                       # This file
 - ./app.py                          # Man chainlit app code
 - ./.env                            # API keys go here (if needed)
 
 
-
-## Components
-
-### TTS-WEBUI Local Servers:
-
--  Gradio UI at http://192.168.1.98:7770
--  React UI at http://192.168.1.98:3000.
-
-### Chatterbox TTS Endpoint
-
-- http://192.168.1.98:7778/v1/audio/speech - OpenAI compatible TTS endpoint
-
-Windows-curl friendly TTS Test string
-
-```
- curl -X POST http://192.168.1.98:7778/v1/audio/speech -H "Content-Type: application/json" -d '{"model":"chatterbox","input":"Hello world! This is a streaming test.","voice":"random","stream":true}' --proxy http://127.0.0.1:8080
- ```
-
-### LM Studio Server
-- http://192.168.1.98:1234/ - base URL
-- http://192.168.1.98:1234/v1 - OpenAPI Compatible endpoints base
-
-## External Docs
-
 ### Chainlit Docs
 
 - https://docs.chainlit.io/get-started/overview
-
-### Chainlit API Reference
-
 - https://docs.chainlit.io/api-reference/lifecycle-hooks/on-chat-start
 - https://docs.chainlit.io/api-reference/lifecycle-hooks/on-audio-chunk
 - https://docs.chainlit.io/api-reference/lifecycle-hooks/on-audio-end
