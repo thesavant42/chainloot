@@ -2,15 +2,70 @@
 document.addEventListener('DOMContentLoaded', () => {
   // Wait for dynamic UI load with MutationObserver
   const observer = new MutationObserver(() => {
-    const micButton = document.querySelector('button.cl-mic-button, button[aria-label="Record audio"], button[data-icon="mic"], button[title*="Record"], button:has(svg[title*="microphone"]), button:has(svg[aria-hidden="true"] svg[title*="microphone"])');
+    // Robust element detection using JS filter for dynamic UI
+    const allButtons = document.querySelectorAll('button');
     const inputField = document.querySelector('textarea.cl-input, input[type="text"][placeholder*="message"], textarea[placeholder*="Type your message"], .message-input');
-    const sendButton = document.querySelector('button.cl-send-button, button[aria-label="Send"], button[data-icon="send"], .send-button');
-
-    // Log for debugging
-    console.log('STT Debug - All buttons:', document.querySelectorAll('button'));
-    console.log('STT Debug - Potential mic:', micButton);
+    
+    let micButton, sendButton;
+    
+    // Log all buttons for debugging
+    console.log('STT Debug - All buttons count:', allButtons.length);
+    allButtons.forEach((btn, index) => {
+      console.log(`STT Debug - Button ${index} outerHTML:`, btn.outerHTML);
+      console.log(`STT Debug - Button ${index} classes:`, btn.className);
+      console.log(`STT Debug - Button ${index} aria-label:`, btn.getAttribute('aria-label'));
+      console.log(`STT Debug - Button ${index} title:`, btn.title);
+      console.log(`STT Debug - Button ${index} innerText:`, btn.innerText);
+      console.log(`STT Debug - Button ${index} innerHTML:`, btn.innerHTML);
+    });
+    
+    // Try position-based detection in input area
+    const inputContainer = document.querySelector('.cl-input-container, .input-bar, .message-input-container, [class*="input"], .cl-footer');
+    if (inputContainer) {
+      const containerButtons = inputContainer.querySelectorAll('button');
+      console.log('STT Debug - Container buttons:', containerButtons.length);
+      if (containerButtons.length >= 3) {
+        micButton = containerButtons[1]; // Second button is mic (attachment 0, mic 1, send 2)
+        sendButton = containerButtons[2]; // Third button is send
+        console.log('STT Debug - Position-based mic:', micButton ? micButton.outerHTML : 'null');
+        console.log('STT Debug - Position-based send:', sendButton ? sendButton.outerHTML : 'null');
+      }
+    }
+    
+    // Fallback to expanded attribute and content-based
+    if (!micButton) {
+      micButton = Array.from(allButtons).find(btn =>
+        btn.innerHTML.includes('mic') ||
+        btn.innerHTML.includes('audio') ||
+        btn.innerHTML.includes('record') ||
+        btn.innerHTML.includes('🎤') ||
+        btn.getAttribute('aria-label')?.includes('audio') ||
+        btn.getAttribute('aria-label')?.includes('record') ||
+        btn.getAttribute('aria-label')?.includes('mic') ||
+        btn.title?.includes('audio') ||
+        btn.title?.includes('record') ||
+        btn.title?.includes('mic') ||
+        btn.classList.contains('cl-mic-button') ||
+        btn.classList.contains('audio-button') ||
+        btn.classList.contains('cl-audio-button')
+      );
+    }
+    
+    if (!sendButton) {
+      sendButton = Array.from(allButtons).find(btn =>
+        btn.innerHTML.includes('send') ||
+        btn.innerHTML.includes('➤') ||
+        btn.innerHTML.includes('arrow') ||
+        btn.getAttribute('aria-label')?.includes('send') ||
+        btn.title?.includes('send') ||
+        btn.classList.contains('cl-send-button') ||
+        btn.classList.contains('send-button')
+      );
+    }
+    
+    console.log('STT Debug - Final mic:', micButton ? micButton.outerHTML : 'null');
+    console.log('STT Debug - Final send:', sendButton ? sendButton.outerHTML : 'null');
     console.log('STT Debug - Input:', inputField);
-    console.log('STT Debug - Send:', sendButton);
 
     if (micButton && inputField && sendButton) {
       observer.disconnect(); // Stop observing once found
@@ -116,26 +171,72 @@ document.addEventListener('DOMContentLoaded', () => {
       console.timeEnd('stt-latency');
     }
 
-    function sendTranscript(transcript, inputField, sendButton) {
+    async function sendTranscript(transcript, inputField, sendButton) {
       inputField.value = transcript;
       inputField.dispatchEvent(new Event('input', { bubbles: true }));
 
-      // Simulate Enter key to send
-      const enterEvent = new KeyboardEvent('keydown', {
-        key: 'Enter',
-        code: 'Enter',
-        keyCode: 13,
-        which: 13,
-        bubbles: true
-      });
-      inputField.dispatchEvent(enterEvent);
+      // Get the unique session ID from the Chainlit window object
+      const sessionId = window.chainlit ? window.chainlit.sessionId : null;
 
-      // Fallback: Click send button
-      setTimeout(() => {
-        if (sendButton && !isListening) {
-          sendButton.click();
+      if (!sessionId) {
+        console.error("Chainlit session ID not found!");
+        // Fallback to original simulation if no session ID
+        const enterEvent = new KeyboardEvent('keydown', {
+          key: 'Enter',
+          code: 'Enter',
+          keyCode: 13,
+          which: 13,
+          bubbles: true
+        });
+        inputField.dispatchEvent(enterEvent);
+        setTimeout(() => {
+          if (sendButton && !isListening) {
+            sendButton.click();
+          }
+        }, 100);
+        setTimeout(() => inputField.value = '', 200);
+        return;
+      }
+
+      try {
+        const response = await fetch("/voice-input", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            transcript: transcript,
+            sessionId: sessionId
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
-      }, 100);
+
+        const result = await response.json();
+        if (result.status !== "ok") {
+          console.error("Backend processing failed:", result.message);
+        } else {
+          console.log("Transcript sent successfully to backend");
+        }
+      } catch (error) {
+        console.error("Error sending transcript to backend:", error);
+        // Fallback to original simulation on error
+        const enterEvent = new KeyboardEvent('keydown', {
+          key: 'Enter',
+          code: 'Enter',
+          keyCode: 13,
+          which: 13,
+          bubbles: true
+        });
+        inputField.dispatchEvent(enterEvent);
+        setTimeout(() => {
+          if (sendButton && !isListening) {
+            sendButton.click();
+          }
+        }, 100);
+      }
 
       // Clear input after send
       setTimeout(() => inputField.value = '', 200);

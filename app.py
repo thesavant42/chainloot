@@ -5,6 +5,10 @@ import json
 from openai import AsyncOpenAI
 import asyncio
 import chainlit as cl
+from fastapi import Request
+from fastapi.responses import JSONResponse
+from chainlit.server import app
+from chainlit.user_session import user_sessions
 from io import BytesIO
 from chainlit.input_widget import Select, Slider, Switch
 import sys
@@ -220,6 +224,39 @@ async def on_settings_update(settings):
         except Exception as e:
             await cl.Message(content=f"Failed to refresh models: {str(e)}").send()
         # Note: User can select "No Action" to stop further refreshes
+
+@app.post("/voice-input")
+async def handle_voice_input(request: Request):
+    """
+    This endpoint receives the transcribed text and sessionId from the frontend,
+    finds the correct user session, and processes the message.
+    """
+    data = await request.json()
+    transcript = data.get("transcript")
+    session_id = data.get("sessionId")
+
+    if not transcript or not session_id:
+        return JSONResponse(content={"status": "error", "message": "Missing transcript or sessionId"}, status_code=400)
+
+    # Check if the session ID is valid
+    if session_id in user_sessions:
+        # Get the user's message processing function (the one decorated with @cl.on_message)
+        on_message_coro = on_message
+
+        # Create the message object
+        msg = cl.Message(author="User", content=transcript)
+
+        # Run the message processing function within the correct user session context
+        await cl.run_sync(
+            cl.context.with_session(
+                user_sessions[session_id].id,
+                lambda: on_message_coro(msg),
+            )
+        )
+        return JSONResponse(content={"status": "ok"}, status_code=200)
+
+    return JSONResponse(content={"status": "error", "message": "Session not found"}, status_code=404)
+
 
 @cl.on_message
 async def on_message(message: cl.Message):

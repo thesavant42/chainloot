@@ -22,38 +22,10 @@ Goal is to unify and simplify the architecture required to run the Robot
 
 - Status: Working on STT / ASR. Trying to hook the microphone button to trigger the browser microphone API.
 
-Bug in mirophone detection
+Microphone is accessible via browser API, but no STT yet.
 
 ```
-16:18:31.313 index.mjs:219 Uncaught (in promise) Error: Session ended: please call .begin() first
-    at CTe.end (index.mjs:219:1775)
-    at Zae.<anonymous> (index.mjs:308:15931)
-    at ca.emit (index.mjs:136:20)
-    at Zae.emitEvent (socket.js:498:20)
-    at Zae.onevent (socket.js:485:18)
-    at Zae.onpacket (socket.js:455:22)
-    at ca.emit (index.mjs:136:20)
-    at manager.js:204:18
-end @ index.mjs:219
-(anonymous) @ index.mjs:308
-ca.emit @ index.mjs:136
-emitEvent @ socket.js:498
-onevent @ socket.js:485
-onpacket @ socket.js:455
-ca.emit @ index.mjs:136
-(anonymous) @ manager.js:204
-Promise.then
-(anonymous) @ websocket-constructor.browser.js:5
-ondecoded @ manager.js:203
-ca.emit @ index.mjs:136
-add @ index.js:146
-ondata @ manager.js:190
-ca.emit @ index.mjs:136
-onPacket @ socket.js:341
-ca.emit @ index.mjs:136
-onPacket @ transport.js:98
-onData @ transport.js:90
-ws.onmessage @ websocket.js:68
+
 ```
 
 
@@ -71,17 +43,15 @@ ws.onmessage @ websocket.js:68
 
 chainlit/ Top Level Directory
 - docs/                             # Folder for documentation and support files, API schema docs
+- docs/docs/                        # Chainlit 2.8.2 Docs
+- docs/cookbook/                    # Chainlit examples REFRENCE ONLY DO NOT EDIT
 - docs/chatterbox-openapi.json      # Minimal OpenAI-compatible TTS API docs
 - docs/gradioopenapi.json           # Detailed Gradio TTS API docs
 - ./README.md                       # This file
 - ./app.py                          # Man chainlit app code
 - ./.env                            # API keys go here (if needed)
 
-## Open Questions
 
-Q: Is there a way to utilize the Whisper service in TTS-WebUI for Speech to text in Chainlit?
-
-A: ** IN PROGRESS**
 
 ## Components
 
