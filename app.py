@@ -1,9 +1,8 @@
-
 import os
 from dotenv import load_dotenv
 import requests
 import json
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, OpenAI
 import asyncio
 import chainlit as cl
 from chainlit.logger import logger
@@ -52,7 +51,8 @@ def fetch_available_models():
         response = requests.get(f"{LM_STUDIO_URL}/api/v0/models")
         response.raise_for_status()
         models_data = response.json()["data"]
-        return [m["id"] for m in models_data if m["type"] == "llm"]
+        # Filter for chat/LLM models, exclude STT/Whisper models
+        return [m["id"] for m in models_data if m["type"] == "llm" and "whisper" not in m["id"].lower()]
     except Exception as e:
         raise Exception(f"Could not fetch models from LM Studio: {e}")
 
@@ -61,6 +61,9 @@ available_models = fetch_available_models()
 api_key = os.getenv("LM_API_KEY", config["api_key"])
 client = AsyncOpenAI(base_url=f"{LM_STUDIO_URL}/v1", api_key=api_key)
 tts_client = AsyncOpenAI(base_url=f"{CHATTERBOX_URL}/v1", api_key=api_key)
+
+# Sync client for STT transcription
+stt_client = OpenAI(base_url=f"{CHATTERBOX_URL}/v1", api_key=api_key)
 # Instrument the OpenAI client
 cl.instrument_openai()
 
@@ -91,6 +94,7 @@ settings = {
 
 @cl.on_chat_start
 async def on_chat_start():
+    logger.info(f"AUDIO DIAG: Chat start - Session ID: {cl.context.session.id}, STT client base: {stt_client.base_url}")
     selected_model = available_models[0]
     cl.user_session.set("selected_model", selected_model)
     
@@ -180,7 +184,7 @@ async def on_chat_start():
     ).send()
 
     await cl.Message(content=f"Model: {selected_model}  Voice: {selected_voice}").send()
-    await cl.Message(content="Voice mode ready!").send()
+    await cl.Message(content="Voice mode ready! Click the microphone icon, record your speech, and send – it will be transcribed automatically.").send()
 
     # Settings are now managed via user_session; UI actions removed due to API incompatibility
 
@@ -222,10 +226,143 @@ async def on_settings_update(settings):
 
 @cl.on_message
 async def on_message(message: cl.Message):
+    logger.info(f"AUDIO DIAG: on_message triggered - Session ID: {cl.context.session.id}, Elements count: {len(message.elements) if message.elements else 0}, Content: '{message.content[:50]}...'")
+    logger.info(f"AUDIO DIAG: Message type: {type(message)}, Elements types: {[type(e).__name__ for e in (message.elements or [])]}")
+    # Handle audio elements from mic or file uploads for STT
+    if message.elements:
+        logger.info(f"AUDIO DIAG: Processing {len(message.elements)} elements")
+        for i, element in enumerate(message.elements):
+            logger.info(f"AUDIO DIAG: Element {i}: type={type(element).__name__}, name={getattr(element, 'name', 'N/A')}")
+            logger.info(f"AUDIO DIAG: Element attributes: {dir(element)}")
+            logger.info(f"AUDIO DIAG: Element dict: {element.__dict__ if hasattr(element, '__dict__') else 'No __dict__'}")
+            audio_bytes = None
+            if isinstance(element, cl.Audio):
+                # Handle direct audio from microphone widget or uploaded audio
+                if element.content is not None:
+                    audio_bytes = element.content
+                    logger.info(f"AUDIO DIAG: Audio element content direct - Name: {element.name}, Mime: {element.mime}, Length: {len(audio_bytes)} bytes")
+                else:
+                    logger.warning(f"AUDIO DIAG: Audio element content is None for {element.name}")
+                    # Try path if available
+                    if hasattr(element, 'path') and element.path:
+                        try:
+                            with open(element.path, 'rb') as f:
+                                audio_bytes = f.read()
+                            logger.info(f"AUDIO DIAG: Audio element from path - Name: {element.name}, Path: {element.path}, Length: {len(audio_bytes)} bytes")
+                        except Exception as path_err:
+                            logger.error(f"AUDIO DIAG: Failed to read from path: {path_err}")
+                    else:
+                        logger.warning(f"AUDIO DIAG: No path available for Audio element {element.name}")
+            elif isinstance(element, cl.File) and element.type.startswith("audio/"):
+                # Fallback for manual file upload
+                audio_bytes = await element.read()
+                logger.info(f"AUDIO DIAG: Audio file uploaded - Name: {element.name}, Type: {element.type}, Length: {len(audio_bytes)} bytes")
+            
+            if audio_bytes is None:
+                logger.warning(f"AUDIO DIAG: No audio bytes found for element {i}")
+                continue
+            logger.info(f"AUDIO DIAG: Found audio bytes, length: {len(audio_bytes)}")
+            try:
+                # 1. Speech-to-Text
+                logger.info(f"AUDIO DIAG: Calling STT API - Model: {config.get('whisper_model', 'openai/whisper-tiny.en')}, URL: {stt_client.base_url}, Bytes: {len(audio_bytes)}")
+                transcription = stt_client.audio.transcriptions.create(
+                    model=config.get("whisper_model", "openai/whisper-tiny.en"),
+                    file=("recorded_audio.wav", BytesIO(audio_bytes)),
+                )
+                user_text = transcription.text.strip()
+                logger.info(f"AUDIO DIAG: STT response - Text length: {len(user_text)}, Text: '{user_text[:50]}...'")
+                
+                if not user_text:
+                    await cl.Message(content="No speech detected in audio.").send()
+                    return
+
+                # Display transcribed text as user message
+                user_msg = await cl.Message(content=user_text).send()
+
+                # Reuse logic for LLM and TTS
+                session_models = cl.user_session.get("available_models")
+                current_models = session_models if session_models else available_models
+                selected_model = cl.user_session.get("selected_model") or current_models[0]
+                system_prompt = cl.user_session.get("system_prompt", prompt_catalog["AI"])
+                reasoning_enabled = cl.user_session.get("reasoning_enabled", False)
+                if reasoning_enabled:
+                    system_prompt += " Think step by step before responding."
+                llm_temp = cl.user_session.get("llm_temp", default_llm_temp)
+                max_tokens = cl.user_session.get("max_tokens", default_max_tokens)
+
+                # 2. LLM Inference
+                response = await client.chat.completions.create(
+                    model=selected_model,
+                    messages=[
+                        {"content": system_prompt, "role": "system"},
+                        {"content": user_text, "role": "user"}
+                    ],
+                    temperature=llm_temp,
+                    max_tokens=max_tokens,
+                )
+                full_response = response.choices[0].message.content
+
+                character = cl.user_session.get("character", character_options[0])
+                text_msg = await cl.Message(content=f"[{character}]: {full_response}").send()
+
+                # 3. Text-to-Speech
+                selected_voice = cl.user_session.get("selected_voice", default_tts_voice)
+                tts_speed = cl.user_session.get("tts_speed", default_tts_speed)
+                tts_exaggeration = cl.user_session.get("tts_exaggeration", default_tts_exaggeration)
+
+                params_dict = {
+                    "exaggeration": tts_exaggeration,
+                    "cfg_weight": config["tts_cfg_weight"],
+                    "temperature": config["tts_temperature"],
+                    "device": config["tts_device"],
+                    "dtype": config["tts_dtype"],
+                    "seed": config["tts_seed"],
+                    "chunked": config["tts_chunked"],
+                    "use_compilation": config["tts_use_compilation"],
+                    "max_new_tokens": config["tts_max_new_tokens"],
+                    "max_cache_len": config["tts_max_cache_len"],
+                    "desired_length": config["tts_desired_length"],
+                    "max_length": config["tts_max_length"],
+                    "halve_first_chunk": True,
+                    "cpu_offload": False,
+                    "cache_voice": False,
+                    "tokens_per_slice": None,
+                    "remove_milliseconds": None,
+                    "remove_milliseconds_start": None,
+                    "chunk_overlap_method": "undefined"
+                }
+
+                buffer = b""
+                async with tts_client.audio.speech.with_streaming_response.create(
+                    model=default_tts_model,
+                    input=full_response,
+                    voice=selected_voice,
+                    response_format=default_tts_response_format,
+                    speed=tts_speed,
+                    extra_body={"params": params_dict}
+                ) as response:
+                    async for chunk in response.iter_bytes():
+                        buffer += chunk
+
+                tts_audio = cl.Audio(
+                    name="response_audio.wav",
+                    content=buffer,
+                    mime="audio/wav",
+                    auto_play=True
+                )
+                await tts_audio.send(for_id=text_msg.id)
+
+            except Exception as e:
+                logger.error(f"AUDIO DIAG: STT or processing error: {str(e)}")
+                await cl.Message(content=f"Error processing audio: {str(e)}").send()
+            return
+
+    # Handle text messages
     if not message.content:
+        logger.info("AUDIO DIAG: Empty content and no elements, skipping")
         return
 
-    logger.info(f"Processing message: {message.content[:100]}...")
+    logger.info(f"Processing text message: {message.content[:100]}...")
     
     # Use latest models from session if available, else global
     session_models = cl.user_session.get("available_models")
@@ -290,8 +427,6 @@ async def on_message(message: cl.Message):
         "chunk_overlap_method": "undefined"
     }
 
-    track_id = f"{cl.context.session.id}_tts_{hash(text_content) % 10000}"
-
     buffer = b""
     async with tts_client.audio.speech.with_streaming_response.create(
         model=default_tts_model,
@@ -312,108 +447,12 @@ async def on_message(message: cl.Message):
     )
     await audio.send(for_id=text_msg.id)
 
-# This is required as of Chainlit >=2.0
-# https://github.com/Chainlit/chainlit/releases/tag/2.0rc0
-# Set to "return True" in the Github example
-# This is required as of Chainlit >=2.0 for audio features
-# https://github.com/Chainlit/chainlit/releases/tag/2.0rc
 @cl.on_audio_start
 async def on_audio_start():
-    # Client-side STT, no server buffering needed
-    logger.info("Audio start event - client-side STT active")
+    logger.info(f"AUDIO DIAG: on_audio_start triggered - Session ID: {cl.context.session.id}")
     return True
 
 @cl.on_audio_end
 async def on_audio_end():
-    # Client-side STT, no server processing needed
-    logger.info("Audio end event - client-side STT active")
+    logger.info(f"AUDIO DIAG: on_audio_end triggered - Session ID: {cl.context.session.id}. Audio will be processed in on_message.")
     return True
-
-# Action handler for client-side STT transcript submission
-@cl.action_callback("stt_submit")
-async def on_stt_submit(action: cl.Action):
-    transcript = action.payload.get("transcript", "").strip()
-    if not transcript:
-        await cl.Message(content="No transcript received from STT.").send()
-        return
-
-    logger.info(f"Received STT transcript: {transcript[:100]}...")
-
-    # Send as user message
-    user_msg = await cl.Message(content=transcript).send()
-
-    # Mirror on_message logic for response
-    session_models = cl.user_session.get("available_models")
-    current_models = session_models if session_models else available_models
-    selected_model = cl.user_session.get("selected_model") or current_models[0]
-    system_prompt = cl.user_session.get("system_prompt", prompt_catalog["AI"])
-    reasoning_enabled = cl.user_session.get("reasoning_enabled", False)
-    if reasoning_enabled:
-        system_prompt += " Think step by step before responding."
-    llm_temp = cl.user_session.get("llm_temp", default_llm_temp)
-    max_tokens = cl.user_session.get("max_tokens", default_max_tokens)
-
-    try:
-        response = await client.chat.completions.create(
-            model=selected_model,
-            messages=[
-                {"content": system_prompt, "role": "system"},
-                {"content": transcript, "role": "user"}
-            ],
-            temperature=llm_temp,
-            max_tokens=max_tokens,
-        )
-        text_content = response.choices[0].message.content
-
-        character = cl.user_session.get("character", character_options[0])
-        text_msg = await cl.Message(content=f"[{character}]: {text_content}").send()
-
-        # Generate TTS audio
-        selected_voice = cl.user_session.get("selected_voice", default_tts_voice)
-        tts_speed = cl.user_session.get("tts_speed", default_tts_speed)
-        tts_exaggeration = cl.user_session.get("tts_exaggeration", default_tts_exaggeration)
-
-        params_dict = {
-            "exaggeration": tts_exaggeration,
-            "cfg_weight": config["tts_cfg_weight"],
-            "temperature": config["tts_temperature"],
-            "device": config["tts_device"],
-            "dtype": config["tts_dtype"],
-            "seed": config["tts_seed"],
-            "chunked": config["tts_chunked"],
-            "use_compilation": config["tts_use_compilation"],
-            "max_new_tokens": config["tts_max_new_tokens"],
-            "max_cache_len": config["tts_max_cache_len"],
-            "desired_length": config["tts_desired_length"],
-            "max_length": config["tts_max_length"],
-            "halve_first_chunk": True,
-            "cpu_offload": False,
-            "cache_voice": False,
-            "tokens_per_slice": None,
-            "remove_milliseconds": None,
-            "remove_milliseconds_start": None,
-            "chunk_overlap_method": "undefined"
-        }
-
-        buffer = b""
-        async with tts_client.audio.speech.with_streaming_response.create(
-            model=default_tts_model,
-            input=text_content,
-            voice=selected_voice,
-            response_format=default_tts_response_format,
-            speed=tts_speed,
-            extra_body={"params": params_dict}
-        ) as response:
-            async for chunk in response.iter_bytes():
-                buffer += chunk
-
-        audio = cl.Audio(
-            name="response_audio.wav",
-            content=buffer,
-            mime="audio/wav",
-            auto_play=True
-        )
-        await audio.send()
-    except Exception as e:
-        logger.error(f"Error processing STT submission: {str(e)}")
-        await cl.Message(content=f"Error processing voice input: {str(e)}").send()

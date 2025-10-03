@@ -2,6 +2,12 @@
 
 I am aiming to build a **real-time conversational AI** that runs entirely on your local network. The user interacts by speaking, and the AI responds with synthesized speech. I've identified the three main stages of this process:
 
+Where I am so far: Text to Speech works! And we can activate the microphone using the integrated Chainlit React UI widget. 
+
+All that is left to do is to connect the plumbing from the microphone Widget to the whisper TTS API at http://192.168.1.98:7778/v1/audio/transcriptions and pipe the results to the model.
+
+
+
 1.  **Speech-to-Text (STT):** Capturing the user's voice with Chainlit, sending it to your local Whisper server, and getting the transcribed text back.
 2.  **LLM Inference:** Sending the transcribed text to your local Large Language Model (hosted via LM Studio) to generate a response.
 3.  **Text-to-Speech (TTS):** Sending the LLM's text response to your local TTS server to generate audio.
@@ -33,6 +39,8 @@ Here is a step-by-step guide to bring your "Local Whisper" project to life, base
 
     OpenAI-Compatible Text to Speech  (TTS) API:    http://192.168.1.98:7778/v1/audio/speech
     OpenAI-Compatible Whisper (STT) API:            http://192.168.1.98:7778/v1/audio/transcriptions
+                                                    "openai/whisper-tiny.en"
+                                                    "openai/whisper-small.en"
     TTS-WebUI Audio Models List (chatterbox)        http://192.168.1.98:7778/v1/audio/models
     List Voices API (chatterbox-tts):               http://192.168.1.98:7778/v1/audio/voices
     LM Studio - List Models (LM Studio api):        http://192.168.1.98:1234/api/v0/models
@@ -40,9 +48,10 @@ Here is a step-by-step guide to bring your "Local Whisper" project to life, base
 
 ### 3\. Write the Chainlit Application
 
-Create a Python file (e.g., `app.py`) in your repository. The logic will involve initializing two separate `OpenAI` clients—one for your LLM and another for your audio services, since they are on different ports.
 
 Here's a general code structure to follow. We will want to preserve the existing functionality used to select model, voice, sampler parameters, prompt, character, etc. But this example outlines all of the components in general required to complete the task.
+
+The task, the part to make sure we get right, is to merge these features into the existing app.py, without breaking ANY of the existing text to speech functionality. This is example code, adapt to make it work with the current app.py.
 
 ```python
 import chainlit as cl
@@ -69,7 +78,7 @@ audio_client = OpenAI(
 
 @cl.on_chat_start
 async def start():
-    await cl.Message(content="Welcome! Record a message to start the conversation.").send()
+    await cl.Message(content="Record a message to start the conversation.").send()
 
 @cl.on_audio_chunk
 async def on_audio_chunk(chunk: cl.AudioChunk):
@@ -89,7 +98,7 @@ async def on_audio_chunk(chunk: cl.AudioChunk):
         
         # --- 1. Speech-to-Text (STT) ---
         transcription_response = audio_client.audio.transcriptions.create(
-            model="whisper-1", # Model name might not matter for your local server
+            model="openai/whisper-large-v3", # Model name might not matter for your local server
             file=audio_file,
         )
         user_text = transcription_response.text
@@ -102,7 +111,7 @@ async def on_audio_chunk(chunk: cl.AudioChunk):
         await msg.send()
 
         stream = llm_client.chat.completions.create(
-            model="your-local-model-name", # Replace with your model identifier from LM Studio
+            model="selected_model", # Replace with your model identifier from LM Studio
             messages=[{"role": "user", "content": user_text}],
             stream=True,
         )
@@ -117,8 +126,8 @@ async def on_audio_chunk(chunk: cl.AudioChunk):
 
         # --- 3. Text-to-Speech (TTS) ---
         tts_response = audio_client.audio.speech.create(
-            model="tts-1", # Model name might not matter
-            voice="your-chosen-voice", # Replace with a valid voice
+            model="chatterbox", # must be chatterbox
+            voice="{config['tts_voice']}", # Replace with a valid voice
             input=full_response,
         )
 
@@ -128,7 +137,7 @@ async def on_audio_chunk(chunk: cl.AudioChunk):
             author="Assistant",
             elements=[
                 cl.Audio(
-                    name="response.mp3",
+                    name="response_audio.wav",
                     content=audio_bytes,
                     auto_play=True, # Set to True to play automatically
                 )
@@ -139,18 +148,7 @@ async def on_audio_chunk(chunk: cl.AudioChunk):
 
 **Key adjustments in the code:**
 
-  * **`llm_client` and `audio_client`**: We define two separate clients because your services are hosted on different ports (`1234` and `7778`).
+  * **`llm_client` and `audio_client`**: We define two separate clients because the services are hosted on different ports (`1234` and `7778`).
   * **Model Names**: Replace `"your-local-model-name"` and `"your-chosen-voice"` with the actual identifiers your local servers expect. Even if the server only has one model loaded, the API often still requires a value in that field.
   * **`cl.on_audio_chunk`**: This is a more modern way to handle audio in Chainlit compared to the older cookbook example. It captures the audio stream chunk by chunk and processes it once the recording is finished.
   * **`auto_play=True`**: This makes the experience much more conversational, as the user doesn't have to manually press play on the audio response.
-
-### 4\. Run the Application
-
-1.  Make sure all your local servers (LM Studio, TTS-WebUI) are running.
-2.  Open your terminal in the project directory.
-3.  Run the Chainlit app:
-    ```bash
-    chainlit run app.py
-    ```
-    
-4.  Open your browser to the address provided by Chainlit (usually `http://localhost:8000`) and start talking\! 

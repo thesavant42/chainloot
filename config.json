@@ -21,5 +21,6 @@
   "tts_max_cache_len": 1500,
   "tts_desired_length": 100,
   "tts_max_length": 300,
-  "tts_webui_url": "http://192.168.1.98:7770"
+  "tts_webui_url": "http://192.168.1.98:7770",
+  "whisper_model": "openai/whisper-small.en"
 }
