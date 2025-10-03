@@ -42,7 +42,8 @@ edit_message = true
 allow_thread_sharing = false
 
 # Custom begin header
-speech_to_text.enabled = true
+# Disabled built-in STT to use custom Whisper API
+speech_to_text.enabled = false
 
 [features.slack]
 # Add emoji reaction when message is received (requires reactions:write OAuth scope)
