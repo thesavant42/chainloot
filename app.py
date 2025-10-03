@@ -11,6 +11,16 @@ from chainlit.input_widget import Select, Slider, Switch
 import sys
 import wave
 
+def raw_pcm_to_wav(pcm_bytes, sample_rate=16000, channels=1, sample_width=2):
+    """Convert raw PCM bytes to WAV bytes."""
+    wav_buffer = BytesIO()
+    with wave.open(wav_buffer, 'wb') as wav_file:
+        wav_file.setnchannels(channels)
+        wav_file.setsampwidth(sample_width)  # 2 bytes for 16-bit
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(pcm_bytes)
+    return wav_buffer.getvalue()
+
 load_dotenv()
 
 # Load config.json
@@ -265,9 +275,20 @@ async def on_message(message: cl.Message):
             try:
                 # 1. Speech-to-Text
                 logger.info(f"AUDIO DIAG: Calling STT API - Model: {config.get('whisper_model', 'openai/whisper-tiny.en')}, URL: {stt_client.base_url}, Bytes: {len(audio_bytes)}")
+                
+                # For uploaded files, assume WAV; for raw (e.g., potential mic elements), convert
+                # Check if it's raw PCM (no path indicates possible raw from widget)
+                is_raw_pcm = not hasattr(element, 'path') or not element.path
+                if is_raw_pcm:
+                    wav_bytes = raw_pcm_to_wav(audio_bytes, sample_rate=16000)
+                    logger.info(f"AUDIO DIAG: Converted {len(audio_bytes)} PCM bytes to {len(wav_bytes)} WAV bytes")
+                    audio_for_stt = wav_bytes
+                else:
+                    audio_for_stt = audio_bytes
+                
                 transcription = stt_client.audio.transcriptions.create(
-                    model=config.get("whisper_model", "openai/whisper-tiny.en"),
-                    file=("recorded_audio.wav", BytesIO(audio_bytes)),
+                    model=config.get("whisper_model", "openai/whisper-small.en"),
+                    file=("recorded_audio.wav", BytesIO(audio_for_stt)),
                 )
                 user_text = transcription.text.strip()
                 logger.info(f"AUDIO DIAG: STT response - Text length: {len(user_text)}, Text: '{user_text[:50]}...'")
@@ -486,9 +507,14 @@ async def on_audio_end():
     try:
         # 1. Speech-to-Text
         logger.info(f"AUDIO DIAG: Calling STT API - Model: {config.get('whisper_model', 'openai/whisper-tiny.en')}, URL: {stt_client.base_url}, Bytes: {len(audio_bytes)}")
+        
+        # Convert raw PCM to WAV for STT
+        wav_bytes = raw_pcm_to_wav(audio_bytes, sample_rate=24000)
+        logger.info(f"AUDIO DIAG: Converted {len(audio_bytes)} PCM bytes to {len(wav_bytes)} WAV bytes")
+        
         transcription = stt_client.audio.transcriptions.create(
-            model=config.get("whisper_model", "openai/whisper-tiny.en"),
-            file=("recorded_audio.wav", BytesIO(audio_bytes)),
+            model=config.get("whisper_model", "openai/whisper-small.en"),
+            file=("recorded_audio.wav", BytesIO(wav_bytes)),
         )
         user_text = transcription.text.strip()
         logger.info(f"AUDIO DIAG: STT response - Text length: {len(user_text)}, Text: '{user_text[:50]}...'")
