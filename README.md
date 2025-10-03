@@ -15,7 +15,7 @@ Goal is to unify and simplify the architecture required to run the Robot
 - [x] Should be able to select from available voices via a drop-down selector text-input
 - [x] Should support a prompt catalog for hot swapping "roles", AI assistant vs. roleplaying character
 - [x] Should support character profiles, to change the chat participants
-- [ ] Should Integrate Whisper-like ASR (Automatic Speech Recognition)
+- [x] Should Integrate Whisper-like ASR (Automatic Speech Recognition)
 - [ ] Should support multi-modal functionality, for image recognition and tool usage.
 
 ## Status
