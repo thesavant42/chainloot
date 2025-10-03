@@ -20,6 +20,11 @@ Goal is to unify and simplify the architecture required to run the Robot
 
 ## Status
 
+Latest commit: Transcription via microphone widget is complete.
+
+![demo](https://github.com/thesavant42/chainloot/blob/main/docs/demo.png?raw=true)
+
+--
 Latest commit leverages the extremely timely addition of the OpenAI-compatible Whisper Speech to text service, so I am trying to use that. 
 What DOES work: If I upload a .wav file through the chainlit interface, it will get transcribed.
 What does NOT work: If I click the Chainlit React UI microphone button, the browser engages the microphone, and the widget responds visually to sound. But upon concluding the spoken dialog and pressing "P" to end recording, the front end SHOULD upload the wav for transcription, but it does not. There's no mesaging of any consequence in the browser console, and chainlit console sees the event but does not receive the audio:
