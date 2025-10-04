@@ -11,7 +11,7 @@ And runs 100% locally, on consumer grade hardware (RTX 4070, 12 Gigs of VRAM)
 
 Goal is to unify and simplify the architecture required to run the Robot. The dream is real time conversational AI.
 
-[![Project Homepage](/docs/scumandvillainy.jpg)](https://hackaday.io/project/195655-hacking-seasonal-yoda)
+[![Project Homepage](/docs/pics/scumandvillainy.jpg)](https://hackaday.io/project/195655-hacking-seasonal-yoda)
 
 
 - [x] Should support hot swapping of different models hosted on LM Studio
@@ -31,7 +31,7 @@ Goal is to unify and simplify the architecture required to run the Robot. The dr
 
 Latest commit: Transcription via microphone widget is complete.
 
-![demo](https://github.com/thesavant42/chainloot/blob/main/docs/demo.png?raw=true)
+![demo](https://github.com/thesavant42/chainloot/blob/main/docs/pics/demo.png?raw=true)
 
 - Firmware: https://github.com/thesavant42/y0da
 
@@ -66,7 +66,7 @@ Latest commit: Transcription via microphone widget is complete.
 
 
 
-![model_settings](https://github.com/thesavant42/chainloot/blob/main/docs/model-settings.png?raw=true)
+![model_settings](https://github.com/thesavant42/chainloot/blob/main/docs/pics/model-settings.png?raw=true)
 
 ## Structure
 
