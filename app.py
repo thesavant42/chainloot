@@ -11,6 +11,9 @@ from chainlit.input_widget import Select, Slider, Switch
 import sys
 import wave
 
+# Import the new message processing function
+from message_processor import process_message_for_tts
+
 def raw_pcm_to_wav(pcm_bytes, sample_rate=16000, channels=1, sample_width=2):
     """Convert raw PCM bytes to WAV bytes."""
     wav_buffer = BytesIO()
@@ -323,14 +326,34 @@ async def on_message(message: cl.Message):
                 )
                 full_response = response.choices[0].message.content
 
+                # --- Sentiment Analysis Integration ---
+                # Process the full response for sentiment analysis and debugging.
+                # The process_message_for_tts function will handle chunking, scrubbing,
+                # sentiment classification, and printing debug statements.
+                # For now, we are not directly using the sentiment to influence TTS,
+                # but the debug statements will be printed.
+                # Future work could involve using processed_message_data to influence TTS.
+                processed_message_data = process_message_for_tts(full_response)
+                # --- End Sentiment Analysis Integration ---
+            
                 character = cl.user_session.get("character", character_options[0])
                 text_msg = await cl.Message(content=f"[{character}]: {full_response}").send()
-
+            
+                # --- Sentiment Analysis Integration ---
+                # Process the full response for sentiment analysis and debugging.
+                # The process_message_for_tts function will handle chunking, scrubbing,
+                # sentiment classification, and printing debug statements.
+                # For now, we are not directly using the sentiment to influence TTS,
+                # but the debug statements will be printed.
+                # Future work could involve using processed_message_data to influence TTS.
+                processed_message_data = process_message_for_tts(full_response)
+                # --- End Sentiment Analysis Integration ---
+            
                 # 3. Text-to-Speech
                 selected_voice = cl.user_session.get("selected_voice", default_tts_voice)
                 tts_speed = cl.user_session.get("tts_speed", default_tts_speed)
                 tts_exaggeration = cl.user_session.get("tts_exaggeration", default_tts_exaggeration)
-
+            
                 params_dict = {
                     "exaggeration": tts_exaggeration,
                     "cfg_weight": config["tts_cfg_weight"],
@@ -352,11 +375,11 @@ async def on_message(message: cl.Message):
                     "remove_milliseconds_start": None,
                     "chunk_overlap_method": "undefined"
                 }
-
+            
                 buffer = b""
                 async with tts_client.audio.speech.with_streaming_response.create(
                     model=default_tts_model,
-                    input=full_response,
+                    input=full_response, # Keep original full_response for TTS input for now
                     voice=selected_voice,
                     response_format=default_tts_response_format,
                     speed=tts_speed,
@@ -548,6 +571,16 @@ async def on_audio_end():
             max_tokens=max_tokens,
         )
         full_response = response.choices[0].message.content
+
+        # --- Sentiment Analysis Integration ---
+        # Process the full response for sentiment analysis and debugging.
+        # The process_message_for_tts function will handle chunking, scrubbing,
+        # sentiment classification, and printing debug statements.
+        # For now, we are not directly using the sentiment to influence TTS,
+        # but the debug statements will be printed.
+        # Future work could involve using processed_message_data to influence TTS.
+        processed_message_data = process_message_for_tts(full_response)
+        # --- End Sentiment Analysis Integration ---
 
         character = cl.user_session.get("character", character_options[0])
         text_msg = await cl.Message(content=f"[{character}]: {full_response}").send()
