@@ -12,7 +12,7 @@ import sys
 import wave
 
 # Import the new message processing function
-from message_processor import process_message_for_tts
+from lib.message_processor import process_message_for_tts
 
 def raw_pcm_to_wav(pcm_bytes, sample_rate=16000, channels=1, sample_width=2):
     """Convert raw PCM bytes to WAV bytes."""

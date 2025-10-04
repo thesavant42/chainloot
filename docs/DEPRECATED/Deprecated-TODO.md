@@ -1,3 +1,6 @@
+# This file is now obsolete
+# included for reference purposes only
+
 # TODO
 
 ## Scrub Messages of unafe characters

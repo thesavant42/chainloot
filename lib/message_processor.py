@@ -1,5 +1,5 @@
-from text_utils import scrub_unsafe_characters, chunk_text
-from feels_classifier import classify_sentiment
+from .text_utils import scrub_unsafe_characters, chunk_text
+from .feels_classifier import classify_sentiment
 
 def process_message_for_tts(message: str) -> list[dict]:
     """
