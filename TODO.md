@@ -46,53 +46,79 @@ New functions to create:
         - If so, chop it up, or summarize more succinctly. 
    -  Submit messages to TTS in batches of *not more than* 200 tokens
 
-Additional Design Needs:
+## Additional Design Needs
 
-Integration Point: Clearly define where in the "bot message response pipeline" this new function will be inserted. This likely involves identifying the specific file and function responsible for handling LLM output before TTS.
+ - [x] Integration Point: Clearly define where in the "bot message response pipeline" this new function will be inserted. This likely involves identifying the specific file and function responsible for handling LLM output before TTS.
 
-Character Scrubbing Implementation: Design the character scrubbing logic. This could be a simple regex replacement or a more sophisticated mapping.
+ app.py:452-461 # text_content is the variable that needs to be squeaky clean sanitized, before it goes to the TTS function
+```
+    async with tts_client.audio.speech.with_streaming_response.create(
+        model=default_tts_model,
+        input=text_content,
+        voice=selected_voice,
+        response_format=default_tts_response_format,
+        speed=tts_speed,
+        extra_body={"params": params_dict}
+    ) as response:
+        async for chunk in response.iter_bytes():
+            buffer += chunk
+```
 
-Message Chunking/Summarization: Design the logic for evaluating message structure and chunking. This might involve tokenization and splitting messages based on a token limit, or even calling a summarization model if a full rewrite is desired (though the current prompt suggests chopping/summarizing rather than full rewrite).
+- [ ] Character Scrubbing Implementation: Design the character scrubbing logic. This could be a simple regex replacement or a more sophisticated mapping.
+  - Alpha uppercase, lowercase, numerals, punctuation.
+  - Limit the scrubbing to the `text_content` variable that's sent to TTS. This way, we won't break scripting and other non-spoken meta characters. 
 
-"Feelings" State Machine: Design the "Feelings" state machine. This will involve:
+
+- [ ] Message Chunking/Summarization: Design the logic for evaluating message structure and chunking. This might involve tokenization and splitting messages based on a token limit, or even calling a summarization model if a full rewrite is desired (though the current prompt suggests chopping/summarizing rather than full rewrite).
+
+- [ ] "Feelings" State Machine: Design the "Feelings" state machine. This will involve:
     Defining the states (the emotions listed).
     Determining how the sentiment analysis output (e.g., top-k predictions from feels.py) maps to these states.
     Considering state transitions and duration.
     Defining the interface for animation macros to consume this state.
 
-TTS Punctuation/Inflection Influence: Design how the emotional sentiment will influence 
+- [ ] TTS Punctuation/Inflection Influence: Design how the emotional sentiment will influence 
 
-TTS punctuation and inflection. This might involve modifying the text sent to the TTS API (e.g., adding specific punctuation or tags if the TTS API supports it) or selecting different voice profiles/styles based on emotion.
+- [ ] TTS punctuation and inflection. This might involve modifying the text sent to the TTS API (e.g., adding specific punctuation or tags if the TTS API supports it) or selecting different voice profiles/styles based on emotion.
 
-Error Handling: Consider how to handle cases where sentiment analysis fails or produces ambiguous results.
+- [ ] Error Handling: Consider how to handle cases where sentiment analysis fails or produces ambiguous results.
 
-Configuration: Determine if any of these parameters (e.g., allowlist characters, token limit, emotion mapping) should be configurable.
+- [ ] Configuration: Determine if any of these parameters (e.g., allowlist characters, token limit, emotion mapping) should be configurable.
 
+### [x] Phase 1 Information Gathering & Core Component Development
 
+- Identify the exact location in the bot's message response pipeline where LLM output is processed before TTS.
+ app.py:452-461 # text_content is the variable that needs to be squeaky clean sanitized, before it goes to the TTS function
+```
+    async with tts_client.audio.speech.with_streaming_response.create(
+        model=default_tts_model,
+        input=text_content,
+        voice=selected_voice,
+        response_format=default_tts_response_format,
+        speed=tts_speed,
+        extra_body={"params": params_dict}
+    ) as response:
+        async for chunk in response.iter_bytes():
+            buffer += chunk
+```
 
-**Phase 1: Information Gathering & Core Component Development**
+### Phase 2 Integration & Orchestration
 
-Identify the exact location in the bot's message response pipeline where LLM output is processed before TTS.
+- Design the "Feelings" state machine, including states, transitions, and output for animation macros.
+- Implement the message chunking logic to break down long messages into batches of max 200 tokens.
 
+- Create an orchestrator function that:
+    - Takes LLM output as -input.
+    - Chunks the message if necessary.
+    - Scrubs unsafe characters.
 
-**Phase 2: Integration & Orchestration**
+- Create a function that:
+    Performs emotional sentiment analysis using the refactored `feels.py` function.
+    - Updates the "Feelings" state machine.
+    - (Optional) Modifies TTS punctuation/inflection based on sentiment.
+    - Returns the processed message chunks and current sentiment state.
+    - Integrate the orchestrator function into the identified bot message response pipeline.
 
-Design the "Feelings" state machine, including states, transitions, and output for animation macros.
-Implement the message chunking logic to break down long messages into batches of max 200 tokens.
+- Verify that the "Feelings" state machine updates correctly
 
-Create a single orchestrator function that:
-    Takes LLM output as input.
-    Chunks the message if necessary.
-    Scrubs unsafe characters.
-
-Performs emotional sentiment analysis using the refactored `feels.py` function.
-  - Updates the "Feelings" state machine.
-  - (Optional) Modifies TTS punctuation/inflection based on sentiment.
-  - Returns the processed message chunks and current sentiment state.
-  - Integrate the orchestrator function into the identified bot message response pipeline.
-
-
-Verify that the "Feelings" state machine updates correctly
-
-(If implemented) Verify TTS inflection changes based on sentiment.
-Document the new message processing pipeline and the "Feels Engine" functionality.
+- (If implemented) Verify TTS inflection changes based on sentiment.
