@@ -213,6 +213,37 @@ async def on_settings_update(settings):
     cl.user_session.set("tts_exaggeration", settings["tts_exaggeration"])
     cl.user_session.set("reasoning_enabled", settings["reasoning_enabled"])
 
+    # Persist settings to config.json
+    try:
+        with open(config_path, 'r') as f:
+            current_config = json.load(f)
+
+        # Update settings that are directly mapped to config.json
+        if "voice" in settings:
+            current_config["tts_voice"] = settings["voice"]
+        if "model" in settings:
+            # LLM model selection is handled by cl.user_session.set("selected_model", settings["model"])
+            # and is not directly persisted to config.json in this manner.
+            pass # No direct persistence to config.json for LLM model ID
+        if "voice" in settings:
+            # Persist the selected TTS voice
+            current_config["tts_voice"] = settings["voice"]
+        if "llm_temp" in settings:
+            current_config["lm_studio_temperature"] = settings["llm_temp"] # Assuming this key exists or should be added
+        if "max_tokens" in settings:
+            current_config["max_tokens"] = settings["max_tokens"]
+        if "tts_speed" in settings:
+            current_config["tts_speed"] = settings["tts_speed"]
+        if "tts_exaggeration" in settings:
+            current_config["tts_exaggeration"] = settings["tts_exaggeration"]
+        
+        # Write the updated config back to the file
+        with open(config_path, 'w') as f:
+            json.dump(current_config, f, indent=4)
+            
+    except Exception as e:
+        logger.error(f"Failed to persist settings to {config_path}: {e}")
+
     if settings["model_refresh"] == "Refresh Now":
         try:
             updated_models = fetch_available_models()
